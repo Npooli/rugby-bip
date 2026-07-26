@@ -96,9 +96,10 @@
       </div>
 
       <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
+      <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
       <div id="bip-source-picker" class="source-grid">
-        <button class="source-btn" data-source="scrum">Melé</button>
-        <button class="source-btn" data-source="lineout">Touch</button>
+        <button class="source-btn" data-source="scrum">Scrum</button>
+        <button class="source-btn" data-source="lineout">Line Out</button>
         <button class="source-btn" data-source="open">Juego libre</button>
         <button class="source-btn" data-source="kick">Patada</button>
       </div>
@@ -153,8 +154,8 @@
 
       <h3 class="summary-subhead">Reinicios de juego</h3>
       <div class="summary-grid">
-        <div><span class="label">Melé</span><span id="sum-scrum" class="value">0</span></div>
-        <div><span class="label">Touch</span><span id="sum-lineout" class="value">0</span></div>
+        <div><span class="label">Scrum</span><span id="sum-scrum" class="value">0</span></div>
+        <div><span class="label">Line Out</span><span id="sum-lineout" class="value">0</span></div>
         <div><span class="label">Libre</span><span id="sum-open" class="value">0</span></div>
         <div><span class="label">Patada</span><span id="sum-kick-restart" class="value">0</span></div>
       </div>

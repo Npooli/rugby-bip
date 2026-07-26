@@ -4,8 +4,8 @@ const STORAGE_KEY = "cronosesion.session.v1";
 const SCHEMA_VERSION = 3; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
 
 const SOURCE_LABELS = {
-  scrum: "Melé",
-  lineout: "Touch",
+  scrum: "Scrum",
+  lineout: "Line Out",
   open: "Juego libre",
   kick: "Patada"
 };
@@ -138,18 +138,20 @@ function finishSession() {
 
 function startActivity(name) {
   if (state.runningActivityId) return;
-  const t = nowIso();
   const activity = {
     id: uid(),
     name: name.trim() || "Actividad sin nombre",
-    startedAt: t,
+    // Left null until the coach taps a restart source below — the clock
+    // only starts at that first BIP tap, not when the activity is created,
+    // so time spent setting up the drill isn't counted as anything.
+    startedAt: null,
     endedAt: null,
     status: "running",
-    phase: "BOP",
+    phase: null,
     // Each entry is a real timestamped interval, not just an accumulated
     // total, so the exact play/rest sequence can be drawn on a timeline and
     // later lined up against GPS or video timestamps.
-    segments: [{ phase: "BOP", startedAt: t, endedAt: null }],
+    segments: [],
     // Point-in-time occurrences (no duration), e.g. rucks.
     events: []
   };
@@ -168,6 +170,7 @@ function startBip(activityId, source) {
   const activity = state.activities.find((a) => a.id === activityId);
   if (!activity || activity.status !== "running" || activity.phase === "BIP") return;
   const t = nowIso();
+  if (!activity.startedAt) activity.startedAt = t;
   closeOpenSegment(activity, t);
   activity.segments.push({ phase: "BIP", source, startedAt: t, endedAt: null });
   activity.phase = "BIP";
@@ -217,6 +220,15 @@ function finishActivity(activityId, atIso, opts = {}) {
   const activity = state.activities.find((a) => a.id === activityId);
   if (!activity || activity.status !== "running") return;
   const t = atIso || nowIso();
+  if (!activity.startedAt) {
+    // Never got a first BIP tap — nothing was actually timed, so discard
+    // it instead of keeping an empty record.
+    state.activities = state.activities.filter((a) => a.id !== activityId);
+    if (state.runningActivityId === activityId) state.runningActivityId = null;
+    saveState();
+    if (!opts.skipRender) render();
+    return;
+  }
   closeOpenSegment(activity, t);
   activity.status = "finished";
   activity.endedAt = t;

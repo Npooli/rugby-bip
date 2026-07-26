@@ -257,6 +257,11 @@ main {
   color: var(--bop);
 }
 
+.source-hint {
+  text-align: center;
+  margin: 0 0 8px;
+}
+
 .source-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
