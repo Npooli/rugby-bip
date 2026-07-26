@@ -282,6 +282,39 @@ function sessionAggregates() {
   return { sourceCounts, eventCounts };
 }
 
+const BIP_STREAK_BUCKETS = [
+  { label: "0-20\"", min: 0, max: 20 },
+  { label: "20-40\"", min: 20, max: 40 },
+  { label: "40-60\"", min: 40, max: 60 },
+  { label: "60-90\"", min: 60, max: 90 },
+  { label: "90-120\"", min: 90, max: 120 },
+  { label: "+120\"", min: 120, max: Infinity }
+];
+
+/* Worst Case Scenario: the single longest uninterrupted BIP streak in the
+   session, plus a histogram of every BIP streak's length — how many short
+   bursts vs sustained periods of real play the team actually produced. */
+function bipStreakStats() {
+  const streaks = [];
+  state.activities.forEach((activity) => {
+    activity.segments.forEach((seg) => {
+      if (seg.phase !== "BIP" || !seg.endedAt) return;
+      const durationS = (Date.parse(seg.endedAt) - Date.parse(seg.startedAt)) / 1000;
+      streaks.push({ durationS, startedAt: seg.startedAt, endedAt: seg.endedAt, activityName: activity.name });
+    });
+  });
+
+  const buckets = BIP_STREAK_BUCKETS.map((b) => ({ ...b, count: 0 }));
+  let longest = null;
+  streaks.forEach((s) => {
+    const bucket = buckets.find((b) => s.durationS >= b.min && s.durationS < b.max) || buckets[buckets.length - 1];
+    bucket.count++;
+    if (!longest || s.durationS > longest.durationS) longest = s;
+  });
+
+  return { buckets, longest, total: streaks.length };
+}
+
 /* ---------- CSV export ---------- */
 
 function buildCsv() {
@@ -460,6 +493,8 @@ const el = {
   sumKickRestart: document.getElementById("sum-kick-restart"),
   sumRuck: document.getElementById("sum-ruck"),
   sumKickEvent: document.getElementById("sum-kick-event"),
+  wcsStat: document.getElementById("wcs-stat"),
+  bipDistribution: document.getElementById("bip-distribution"),
   btnExportCsv: document.getElementById("btn-export-csv")
 };
 
@@ -512,6 +547,18 @@ function render() {
     el.sumKickRestart.textContent = sourceCounts.kick;
     el.sumRuck.textContent = eventCounts.RUCK;
     el.sumKickEvent.textContent = eventCounts.KICK;
+
+    const { buckets, longest } = bipStreakStats();
+    el.wcsStat.innerHTML = longest
+      ? `<span class="wcs-duration">${fmtHMS(longest.durationS * 1000)}</span> — ${fmtClockTime(longest.startedAt)} a ${fmtClockTime(longest.endedAt)} · ${escapeHtml(longest.activityName)}`
+      : "Sin datos";
+    const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+    el.bipDistribution.innerHTML = buckets.map((b) => `
+      <div class="dist-row">
+        <span class="dist-label">${b.label}</span>
+        <div class="dist-bar"><div class="dist-bar-fill" style="width:${((b.count / maxCount) * 100).toFixed(1)}%"></div></div>
+        <span class="dist-count">${b.count}</span>
+      </div>`).join("");
   }
 
   tick(); // paint live numbers immediately
@@ -536,7 +583,9 @@ function renderFinishedActivities() {
       <div class="act-name">${escapeHtml(activity.name)}</div>
       <div class="act-meta">
         <span>${fmtClockTime(activity.startedAt)} → ${fmtClockTime(activity.endedAt)}</span>
-        <span>${fmtHMS(stats.totalMs)}</span>
+        <span>${fmtHMS(stats.totalMs)} total</span>
+        <span class="bip-tag">BIP ${fmtHMS(stats.bipMs)}</span>
+        <span class="bop-tag">BOP ${fmtHMS(stats.bopMs)}</span>
         <span>${stats.pct.toFixed(0)}% juego real</span>
         <span>ratio ${formatRatio(stats.ratio)}</span>
       </div>`;
