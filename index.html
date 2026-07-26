@@ -63,6 +63,10 @@
     <div id="new-activity-form" class="card">
       <h2>Nueva actividad</h2>
       <input id="input-activity-name" type="text" placeholder="Nombre de la actividad (ej. Entrada en calor)" maxlength="60">
+      <label class="check-row">
+        <input type="checkbox" id="input-track-bip">
+        <span>Medir BIP/BOP en esta actividad</span>
+      </label>
       <button id="btn-start-activity" class="big-btn start">Iniciar actividad</button>
     </div>
 
@@ -74,7 +78,7 @@
         <div><span class="label">Duración</span><span id="active-activity-elapsed" class="value big">00:00:00</span></div>
       </div>
 
-      <div class="live-ball-wrap">
+      <div id="live-ball-wrap" class="live-ball-wrap">
         <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="40" height="40" aria-hidden="true">
           <ellipse cx="50" cy="30" rx="44" ry="25"/>
           <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
@@ -84,7 +88,7 @@
         </svg>
       </div>
 
-      <div class="phase-status">
+      <div id="phase-status-row" class="phase-status">
         <div class="phase-status-item bop">
           <span class="phase-label">BOP</span>
           <span id="bop-time" class="phase-time">00:00</span>
@@ -111,11 +115,11 @@
       </div>
       <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
 
-      <div class="bip-percent-row">
+      <div id="bip-percent-row" class="bip-percent-row">
         <div class="bip-bar"><div id="bip-bar-fill" class="bip-bar-fill"></div></div>
         <span id="bip-percent" class="bip-percent-label">0% juego real</span>
       </div>
-      <div class="ratio-row">
+      <div id="ratio-row" class="ratio-row">
         <span class="label">Ratio trabajo:descanso</span>
         <span id="bip-ratio" class="value">—</span>
       </div>
@@ -141,6 +145,7 @@
         <span class="legend-item"><span class="legend-swatch bip"></span>BIP · balón en juego</span>
         <span class="legend-item"><span class="legend-swatch bop"></span>BOP · fuera de juego</span>
         <span class="legend-item"><span class="legend-swatch gap"></span>Sin actividad</span>
+        <span class="legend-item"><span class="legend-swatch untracked"></span>Sin medir BIP</span>
         <span class="legend-item"><span class="legend-dot"></span>Ruck / Patada</span>
       </div>
       <div id="timeline-axis" class="timeline-axis"></div>

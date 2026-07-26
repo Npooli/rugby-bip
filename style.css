@@ -257,6 +257,26 @@ main {
   color: var(--bop);
 }
 
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.check-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.timeline-seg.untracked {
+  background: var(--muted);
+  opacity: 0.55;
+}
+
 .source-hint {
   text-align: center;
   margin: 0 0 8px;
@@ -541,6 +561,7 @@ main {
 .legend-swatch.bip { background: var(--bip); }
 .legend-swatch.bop { background: var(--bop); }
 .legend-swatch.gap { background: var(--gap); opacity: 0.5; }
+.legend-swatch.untracked { background: var(--muted); opacity: 0.55; }
 
 .legend-dot {
   width: 8px;
