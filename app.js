@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "cronosesion.session.v1";
-const SCHEMA_VERSION = 4; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
+const SCHEMA_VERSION = 5; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
 
 const SOURCE_LABELS = {
   scrum: "Scrum",
@@ -136,31 +136,26 @@ function finishSession() {
   render();
 }
 
-function startActivity(name, tracksBip) {
+function startActivity(name) {
   if (state.runningActivityId) return;
+  const t = nowIso();
   const activity = {
     id: uid(),
     name: name.trim() || "Actividad sin nombre",
-    // Activities that don't track BIP/BOP (warm-ups, technical work) just
-    // need a plain start/stop timer so their time still counts toward the
-    // session total. Ones that do track it stay pending — startedAt is left
-    // null until the coach taps a restart source below, so time spent
-    // setting up the drill isn't counted as anything.
-    tracksBip,
-    startedAt: tracksBip ? null : nowIso(),
+    startedAt: t,
     endedAt: null,
     status: "running",
-    phase: null,
+    phase: "BOP",
     // Each entry is a real timestamped interval, not just an accumulated
     // total, so the exact play/rest sequence can be drawn on a timeline and
-    // later lined up against GPS or video timestamps. Unused when
-    // tracksBip is false — that case uses `clock` instead.
-    segments: [],
-    clock: createClock(),
+    // later lined up against GPS or video timestamps. Whether this activity
+    // "measures BIP" isn't a separate flag — it's simply whether a BIP
+    // segment ever shows up here. Tag a restart source at any point to
+    // start counting; never tag one and it just stays a plain timer.
+    segments: [{ phase: "BOP", startedAt: t, endedAt: null }],
     // Point-in-time occurrences (no duration), e.g. rucks.
     events: []
   };
-  if (!tracksBip) startClock(activity.clock, activity.startedAt);
   state.activities.push(activity);
   state.runningActivityId = activity.id;
   saveState();
@@ -174,9 +169,8 @@ function closeOpenSegment(activity, atIso) {
 
 function startBip(activityId, source) {
   const activity = state.activities.find((a) => a.id === activityId);
-  if (!activity || !activity.tracksBip || activity.status !== "running" || activity.phase === "BIP") return;
+  if (!activity || activity.status !== "running" || activity.phase === "BIP") return;
   const t = nowIso();
-  if (!activity.startedAt) activity.startedAt = t;
   closeOpenSegment(activity, t);
   activity.segments.push({ phase: "BIP", source, startedAt: t, endedAt: null });
   activity.phase = "BIP";
@@ -186,7 +180,7 @@ function startBip(activityId, source) {
 
 function endBip(activityId) {
   const activity = state.activities.find((a) => a.id === activityId);
-  if (!activity || !activity.tracksBip || activity.status !== "running" || activity.phase !== "BIP") return;
+  if (!activity || activity.status !== "running" || activity.phase !== "BIP") return;
   const t = nowIso();
   closeOpenSegment(activity, t);
   activity.segments.push({ phase: "BOP", startedAt: t, endedAt: null });
@@ -214,13 +208,9 @@ function reopenLastActivity() {
   if (!activity || activity.status !== "finished") return;
   activity.status = "running";
   activity.endedAt = null;
-  if (activity.tracksBip) {
-    const lastSegment = activity.segments[activity.segments.length - 1];
-    lastSegment.endedAt = null;
-    activity.phase = lastSegment.phase;
-  } else {
-    startClock(activity.clock, nowIso());
-  }
+  const lastSegment = activity.segments[activity.segments.length - 1];
+  lastSegment.endedAt = null;
+  activity.phase = lastSegment.phase;
   state.runningActivityId = activity.id;
   saveState();
   render();
@@ -230,26 +220,6 @@ function finishActivity(activityId, atIso, opts = {}) {
   const activity = state.activities.find((a) => a.id === activityId);
   if (!activity || activity.status !== "running") return;
   const t = atIso || nowIso();
-
-  if (!activity.tracksBip) {
-    stopClock(activity.clock, t);
-    activity.status = "finished";
-    activity.endedAt = t;
-    if (state.runningActivityId === activityId) state.runningActivityId = null;
-    saveState();
-    if (!opts.skipRender) render();
-    return;
-  }
-
-  if (!activity.startedAt) {
-    // Never got a first BIP tap — nothing was actually timed, so discard
-    // it instead of keeping an empty record.
-    state.activities = state.activities.filter((a) => a.id !== activityId);
-    if (state.runningActivityId === activityId) state.runningActivityId = null;
-    saveState();
-    if (!opts.skipRender) render();
-    return;
-  }
   closeOpenSegment(activity, t);
   activity.status = "finished";
   activity.endedAt = t;
@@ -278,9 +248,6 @@ function segmentDurationMs(segment, nowMs) {
 }
 
 function activityStats(activity, nowMs = Date.now()) {
-  if (!activity.tracksBip) {
-    return { bipMs: 0, bopMs: 0, totalMs: clockElapsedMs(activity.clock, nowMs), pct: null, ratio: null, tracked: false };
-  }
   let bipMs = 0;
   let bopMs = 0;
   for (const seg of activity.segments) {
@@ -291,7 +258,11 @@ function activityStats(activity, nowMs = Date.now()) {
   const totalMs = bipMs + bopMs;
   const pct = totalMs > 0 ? (bipMs / totalMs) * 100 : 0;
   const ratio = bopMs > 0 ? bipMs / bopMs : (bipMs > 0 ? Infinity : 0);
-  return { bipMs, bopMs, totalMs, pct, ratio, tracked: true };
+  // "Tracked" isn't a stored flag — it's simply whether a BIP tag was ever
+  // used. An activity that's all BOP was never actually measured, so it
+  // reads as "sin medir" rather than a misleading 0%.
+  const tracked = activity.segments.some((seg) => seg.phase === "BIP");
+  return { bipMs, bopMs, totalMs, pct, ratio, tracked };
 }
 
 function formatRatio(ratio) {
@@ -497,7 +468,6 @@ const el = {
   btnFinishSession: document.getElementById("btn-finish-session"),
   newActivityForm: document.getElementById("new-activity-form"),
   inputActivityName: document.getElementById("input-activity-name"),
-  inputTrackBip: document.getElementById("input-track-bip"),
   btnStartActivity: document.getElementById("btn-start-activity"),
   activeActivity: document.getElementById("active-activity"),
   activeActivityName: document.getElementById("active-activity-name"),
@@ -505,17 +475,13 @@ const el = {
   activeActivityElapsed: document.getElementById("active-activity-elapsed"),
   phaseStatusBip: document.querySelector(".phase-status-item.bip"),
   phaseStatusBop: document.querySelector(".phase-status-item.bop"),
-  phaseStatusRow: document.getElementById("phase-status-row"),
   liveBall: document.getElementById("live-ball"),
-  liveBallWrap: document.getElementById("live-ball-wrap"),
   bipSourceHint: document.getElementById("bip-source-hint"),
   bipSourcePicker: document.getElementById("bip-source-picker"),
   sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
   bipActiveInfo: document.getElementById("bip-active-info"),
   bipSourceLabel: document.getElementById("bip-source-label"),
   btnEndBip: document.getElementById("btn-end-bip"),
-  bipPercentRow: document.getElementById("bip-percent-row"),
-  ratioRow: document.getElementById("ratio-row"),
   bipTime: document.getElementById("bip-time"),
   bopTime: document.getElementById("bop-time"),
   bipBarFill: document.getElementById("bip-bar-fill"),
@@ -559,31 +525,19 @@ function render() {
   if (active) {
     el.activeActivityName.textContent = active.name;
     el.activeActivityStart.textContent = fmtClockTime(active.startedAt);
+    el.phaseStatusBip.classList.toggle("active", active.phase === "BIP");
+    el.phaseStatusBop.classList.toggle("active", active.phase === "BOP");
+    el.liveBall.classList.toggle("phase-bip", active.phase === "BIP");
+    el.liveBall.classList.toggle("phase-bop", active.phase === "BOP");
 
-    el.liveBallWrap.hidden = !active.tracksBip;
-    el.phaseStatusRow.hidden = !active.tracksBip;
-    el.bipPercentRow.hidden = !active.tracksBip;
-    el.ratioRow.hidden = !active.tracksBip;
-    el.bipSourceHint.hidden = !active.tracksBip;
-    el.bipSourcePicker.hidden = !active.tracksBip;
-    el.bipActiveInfo.hidden = true;
-    el.btnEndBip.hidden = true;
-
-    if (active.tracksBip) {
-      el.phaseStatusBip.classList.toggle("active", active.phase === "BIP");
-      el.phaseStatusBop.classList.toggle("active", active.phase === "BOP");
-      el.liveBall.classList.toggle("phase-bip", active.phase === "BIP");
-      el.liveBall.classList.toggle("phase-bop", active.phase === "BOP");
-
-      const inPlay = active.phase === "BIP";
-      el.bipSourceHint.hidden = inPlay;
-      el.bipSourcePicker.hidden = inPlay;
-      el.bipActiveInfo.hidden = !inPlay;
-      el.btnEndBip.hidden = !inPlay;
-      if (inPlay) {
-        const openSegment = active.segments[active.segments.length - 1];
-        el.bipSourceLabel.textContent = SOURCE_LABELS[openSegment.source] || "—";
-      }
+    const inPlay = active.phase === "BIP";
+    el.bipSourceHint.hidden = inPlay;
+    el.bipSourcePicker.hidden = inPlay;
+    el.bipActiveInfo.hidden = !inPlay;
+    el.btnEndBip.hidden = !inPlay;
+    if (inPlay) {
+      const openSegment = active.segments[active.segments.length - 1];
+      el.bipSourceLabel.textContent = SOURCE_LABELS[openSegment.source] || "—";
     }
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
@@ -639,7 +593,7 @@ function renderFinishedActivities() {
         <span class="bop-tag">BOP ${fmtHMS(stats.bopMs)}</span>
         <span>${stats.pct.toFixed(0)}% juego real</span>
         <span>ratio ${formatRatio(stats.ratio)}</span>` : `
-        <span class="bip-tag" style="color:var(--muted)">sin medir BIP</span>`;
+        <span class="bip-tag" style="color:var(--untracked)">sin medir BIP</span>`;
     li.innerHTML = `
       <div class="act-name">${escapeHtml(activity.name)}</div>
       <div class="act-meta">
@@ -729,7 +683,7 @@ function renderTimeline() {
     label.className = "timeline-row-label";
     label.innerHTML = stats.tracked
       ? `<span>${escapeHtml(activity.name)}</span><span class="pct">${stats.pct.toFixed(0)}%</span>`
-      : `<span>${escapeHtml(activity.name)}</span><span class="pct" style="color:var(--muted)">sin medir</span>`;
+      : `<span>${escapeHtml(activity.name)}</span><span class="pct" style="color:var(--untracked)">sin medir</span>`;
     row.appendChild(label);
 
     const track = document.createElement("div");
@@ -742,7 +696,7 @@ function renderTimeline() {
       fill.appendChild(makeSeg("gap", 0, pct(actStartMs - fullStartMs), "Sin actividad registrada"));
     }
 
-    if (activity.tracksBip) {
+    if (stats.tracked) {
       activity.segments.forEach((seg) => {
         const segStartMs = Date.parse(seg.startedAt);
         const segEndMs = seg.endedAt ? Date.parse(seg.endedAt) : actEndMs;
@@ -801,13 +755,11 @@ function tick() {
   if (active) {
     const stats = activityStats(active, now);
     el.activeActivityElapsed.textContent = fmtHMS(stats.totalMs);
-    if (stats.tracked) {
-      el.bipTime.textContent = fmtMS(stats.bipMs);
-      el.bopTime.textContent = fmtMS(stats.bopMs);
-      el.bipBarFill.style.width = `${stats.pct.toFixed(1)}%`;
-      el.bipPercent.textContent = `${stats.pct.toFixed(0)}% juego real`;
-      el.bipRatio.textContent = formatRatio(stats.ratio);
-    }
+    el.bipTime.textContent = fmtMS(stats.bipMs);
+    el.bopTime.textContent = fmtMS(stats.bopMs);
+    el.bipBarFill.style.width = `${stats.pct.toFixed(1)}%`;
+    el.bipPercent.textContent = `${stats.pct.toFixed(0)}% juego real`;
+    el.bipRatio.textContent = formatRatio(stats.ratio);
   }
 }
 
@@ -865,9 +817,8 @@ el.btnFinishSession.addEventListener("click", () => {
   if (confirm("¿Finalizar la sesión?")) finishSession();
 });
 el.btnStartActivity.addEventListener("click", () => {
-  startActivity(el.inputActivityName.value, el.inputTrackBip.checked);
+  startActivity(el.inputActivityName.value);
   el.inputActivityName.value = "";
-  el.inputTrackBip.checked = false;
 });
 el.inputActivityName.addEventListener("keydown", (e) => {
   if (e.key === "Enter") el.btnStartActivity.click();
