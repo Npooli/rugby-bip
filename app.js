@@ -333,12 +333,94 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+/* ---------- Import from Angles XML ----------
+   Angles exports a Sportscode-style timeline XML (UTF-16, one <instance> per
+   coded event with <code>/<start>/<end> in seconds from the video's zero
+   point). We only pull the "01 BIP" / "02 OUT" tracks — Angles ships a
+   duplicate "BIP GPS" copy of the BIP track specifically for lining up with
+   GPS providers, which confirms this maps directly onto our own phase model.
+   The video's own clock has no relation to wall-clock time, so the user
+   supplies one anchor point (the real time video-second 0 corresponds to)
+   and every timestamp is derived from that. */
+
+let pendingAnglesImport = null;
+
+async function decodeXmlFile(file) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let encoding = "utf-8";
+  let offset = 0;
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) { encoding = "utf-16le"; offset = 2; }
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) { encoding = "utf-16be"; offset = 2; }
+  return new TextDecoder(encoding).decode(buf.slice(offset));
+}
+
+function parseAnglesXml(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+  if (doc.querySelector("parsererror")) throw new Error("XML inválido o corrupto");
+
+  const segments = [];
+  for (const inst of doc.querySelectorAll("instance")) {
+    const code = (inst.querySelector("code")?.textContent || "").trim().toUpperCase();
+    const startS = parseFloat(inst.querySelector("start")?.textContent);
+    const endS = parseFloat(inst.querySelector("end")?.textContent);
+    if (!Number.isFinite(startS) || !Number.isFinite(endS)) continue;
+    if (/\bBIP\b/.test(code) && !code.includes("GPS")) {
+      segments.push({ phase: "BIP", startMs: startS * 1000, endMs: endS * 1000 });
+    } else if (code.includes("OUT")) {
+      segments.push({ phase: "BOP", startMs: startS * 1000, endMs: endS * 1000 });
+    }
+  }
+  if (!segments.length) throw new Error("No se encontraron tramos BIP/OUT en este archivo");
+  segments.sort((a, b) => a.startMs - b.startMs);
+  return segments;
+}
+
+function buildSessionFromAngles(segments, anchorMs) {
+  const toIso = (ms) => new Date(anchorMs + ms).toISOString();
+  const minStartMs = segments[0].startMs;
+  const maxEndMs = Math.max(...segments.map((s) => s.endMs));
+  const startedAt = toIso(minStartMs);
+  const endedAt = toIso(maxEndMs);
+  const activity = {
+    id: uid(),
+    name: "Partido importado (Angles)",
+    startedAt,
+    endedAt,
+    status: "finished",
+    phase: null,
+    segments: segments.map((s) => ({
+      phase: s.phase,
+      startedAt: toIso(s.startMs),
+      endedAt: toIso(s.endMs)
+    })),
+    events: []
+  };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: uid(),
+    startedAt,
+    endedAt,
+    status: "finished",
+    clock: { elapsedMs: maxEndMs - minStartMs, lastStartedAt: null, running: false },
+    activities: [activity],
+    runningActivityId: null
+  };
+}
+
 /* ---------- Rendering ---------- */
 
 const el = {
   btnNewSession: document.getElementById("btn-new-session"),
   viewIdle: document.getElementById("view-idle"),
   btnStartSession: document.getElementById("btn-start-session"),
+  btnShowImport: document.getElementById("btn-show-import"),
+  importForm: document.getElementById("import-form"),
+  importFileInput: document.getElementById("import-file-input"),
+  importStatus: document.getElementById("import-status"),
+  importAnchorRow: document.getElementById("import-anchor-row"),
+  importAnchorTime: document.getElementById("import-anchor-time"),
+  btnConfirmImport: document.getElementById("btn-confirm-import"),
   viewSession: document.getElementById("view-session"),
   sessionStartTime: document.getElementById("session-start-time"),
   sessionElapsed: document.getElementById("session-elapsed"),
@@ -617,6 +699,51 @@ setInterval(tick, 500);
 /* ---------- Wire up events ---------- */
 
 el.btnStartSession.addEventListener("click", startSession);
+
+el.btnShowImport.addEventListener("click", () => {
+  el.importForm.hidden = !el.importForm.hidden;
+});
+
+el.importFileInput.addEventListener("change", async () => {
+  const file = el.importFileInput.files[0];
+  pendingAnglesImport = null;
+  el.importAnchorRow.hidden = true;
+  if (!file) return;
+  el.importStatus.textContent = "Leyendo archivo...";
+  try {
+    const xmlText = await decodeXmlFile(file);
+    const segments = parseAnglesXml(xmlText);
+    pendingAnglesImport = segments;
+    const totalMin = Math.round((segments[segments.length - 1].endMs - segments[0].startMs) / 60000);
+    el.importStatus.textContent = `Encontrados ${segments.length} tramos BIP/OUT (~${totalMin} min). Indicá la hora real de inicio del video.`;
+    const now = new Date();
+    now.setSeconds(0, 0);
+    el.importAnchorTime.value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    el.importAnchorRow.hidden = false;
+  } catch (err) {
+    el.importStatus.textContent = `Error: ${err.message}`;
+  }
+});
+
+el.btnConfirmImport.addEventListener("click", () => {
+  if (!pendingAnglesImport) return;
+  const anchorValue = el.importAnchorTime.value;
+  const anchorMs = new Date(anchorValue).getTime();
+  if (!anchorValue || !Number.isFinite(anchorMs)) {
+    el.importStatus.textContent = "Indicá una hora real válida.";
+    return;
+  }
+  if (state.status !== "idle") {
+    const ok = confirm("Esto reemplaza la sesión actual sin exportar. ¿Continuar?");
+    if (!ok) return;
+  }
+  state = buildSessionFromAngles(pendingAnglesImport, anchorMs);
+  pendingAnglesImport = null;
+  el.importForm.hidden = true;
+  el.importFileInput.value = "";
+  saveState();
+  render();
+});
 el.btnFinishSession.addEventListener("click", () => {
   if (confirm("¿Finalizar la sesión?")) finishSession();
 });

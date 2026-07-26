@@ -31,6 +31,20 @@
   <!-- Estado: sin sesión iniciada -->
   <section id="view-idle" class="view">
     <button id="btn-start-session" class="big-btn start">Iniciar sesión</button>
+
+    <div class="import-section">
+      <button id="btn-show-import" class="link-btn">Importar XML de Angles</button>
+      <div id="import-form" class="card" hidden>
+        <h2>Importar sesión desde Angles</h2>
+        <input type="file" id="import-file-input" accept=".xml">
+        <p id="import-status" class="import-status"></p>
+        <div id="import-anchor-row" hidden>
+          <label class="label" for="import-anchor-time">Hora real de inicio del video</label>
+          <input type="datetime-local" id="import-anchor-time">
+          <button id="btn-confirm-import" class="big-btn start">Generar sesión</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- Estado: sesión en curso o finalizada -->

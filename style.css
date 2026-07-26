@@ -578,6 +578,49 @@ main {
   color: var(--text);
 }
 
+.import-section {
+  margin-top: 18px;
+  text-align: center;
+}
+
+#import-form {
+  text-align: left;
+  margin-top: 14px;
+}
+
+#import-form input[type="file"] {
+  width: 100%;
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+#import-anchor-row {
+  margin-top: 14px;
+}
+
+#import-anchor-row .label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+#import-anchor-time {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+
+.import-status {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
 .app-footer {
   text-align: center;
   font-size: 12px;
