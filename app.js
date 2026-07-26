@@ -1,0 +1,663 @@
+"use strict";
+
+const STORAGE_KEY = "cronosesion.session.v1";
+const SCHEMA_VERSION = 3; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
+
+const SOURCE_LABELS = {
+  scrum: "Melé",
+  lineout: "Touch",
+  open: "Juego libre",
+  kick: "Patada"
+};
+
+/* ---------- Clock helpers ----------
+   Each clock stores an elapsed baseline (ms) plus the real timestamp it was
+   last (re)started at. Live elapsed time is always derived by diffing the
+   real clock, never by counting timer ticks, so it stays correct even if the
+   tab is backgrounded/suspended. */
+
+function createClock() {
+  return { elapsedMs: 0, lastStartedAt: null, running: false };
+}
+
+function startClock(clock, atIso) {
+  if (clock.running) return;
+  clock.running = true;
+  clock.lastStartedAt = atIso;
+}
+
+function stopClock(clock, atIso) {
+  if (!clock.running) return;
+  clock.elapsedMs = clockElapsedMs(clock, Date.parse(atIso));
+  clock.running = false;
+  clock.lastStartedAt = null;
+}
+
+function clockElapsedMs(clock, nowMs = Date.now()) {
+  if (!clock.running || !clock.lastStartedAt) return clock.elapsedMs;
+  const startedAtMs = Date.parse(clock.lastStartedAt);
+  if (!Number.isFinite(startedAtMs)) return clock.elapsedMs;
+  return clock.elapsedMs + Math.max(0, nowMs - startedAtMs);
+}
+
+/* ---------- Formatting ---------- */
+
+function fmtHMS(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function fmtMS(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function fmtClockTime(iso) {
+  if (!iso) return "--:--:--";
+  return new Date(iso).toLocaleTimeString("es-AR", {
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  });
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+/* ---------- State ---------- */
+
+let state = loadState() || freshSession();
+
+function freshSession() {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: uid(),
+    startedAt: null,
+    endedAt: null,
+    status: "idle", // idle | running | finished
+    clock: createClock(),
+    activities: [],
+    runningActivityId: null
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.schemaVersion !== SCHEMA_VERSION) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* storage unavailable, non-fatal */
+  }
+}
+
+function currentActivity() {
+  return state.activities.find((a) => a.id === state.runningActivityId) || null;
+}
+
+/* ---------- Actions ---------- */
+
+function startSession() {
+  const t = nowIso();
+  state.startedAt = t;
+  state.status = "running";
+  startClock(state.clock, t);
+  saveState();
+  render();
+}
+
+function finishSession() {
+  const t = nowIso();
+  const active = currentActivity();
+  if (active) finishActivity(active.id, t, { skipRender: true });
+  stopClock(state.clock, t);
+  state.endedAt = t;
+  state.status = "finished";
+  saveState();
+  render();
+}
+
+function startActivity(name) {
+  if (state.runningActivityId) return;
+  const t = nowIso();
+  const activity = {
+    id: uid(),
+    name: name.trim() || "Actividad sin nombre",
+    startedAt: t,
+    endedAt: null,
+    status: "running",
+    phase: "BOP",
+    // Each entry is a real timestamped interval, not just an accumulated
+    // total, so the exact play/rest sequence can be drawn on a timeline and
+    // later lined up against GPS or video timestamps.
+    segments: [{ phase: "BOP", startedAt: t, endedAt: null }],
+    // Point-in-time occurrences (no duration), e.g. rucks.
+    events: []
+  };
+  state.activities.push(activity);
+  state.runningActivityId = activity.id;
+  saveState();
+  render();
+}
+
+function closeOpenSegment(activity, atIso) {
+  const openSegment = activity.segments[activity.segments.length - 1];
+  if (openSegment && openSegment.endedAt === null) openSegment.endedAt = atIso;
+}
+
+function startBip(activityId, source) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity || activity.status !== "running" || activity.phase === "BIP") return;
+  const t = nowIso();
+  closeOpenSegment(activity, t);
+  activity.segments.push({ phase: "BIP", source, startedAt: t, endedAt: null });
+  activity.phase = "BIP";
+  saveState();
+  render();
+}
+
+function endBip(activityId) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity || activity.status !== "running" || activity.phase !== "BIP") return;
+  const t = nowIso();
+  closeOpenSegment(activity, t);
+  activity.segments.push({ phase: "BOP", startedAt: t, endedAt: null });
+  activity.phase = "BOP";
+  saveState();
+  render();
+}
+
+function logEvent(activityId, type) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity || activity.status !== "running") return;
+  activity.events.push({ id: uid(), type, at: nowIso() });
+  saveState();
+  render();
+}
+
+/* Reopen the most recently finished activity so it can keep being timed —
+   e.g. it was marked done, then the coach decided to run one more rep. Only
+   valid for the last activity in the session while nothing else is running,
+   since the single-slot runningActivityId model can't represent two
+   activities in progress at once. */
+function reopenLastActivity() {
+  if (state.status !== "running" || state.runningActivityId) return;
+  const activity = state.activities[state.activities.length - 1];
+  if (!activity || activity.status !== "finished") return;
+  activity.status = "running";
+  activity.endedAt = null;
+  const lastSegment = activity.segments[activity.segments.length - 1];
+  lastSegment.endedAt = null;
+  activity.phase = lastSegment.phase;
+  state.runningActivityId = activity.id;
+  saveState();
+  render();
+}
+
+function finishActivity(activityId, atIso, opts = {}) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity || activity.status !== "running") return;
+  const t = atIso || nowIso();
+  closeOpenSegment(activity, t);
+  activity.status = "finished";
+  activity.endedAt = t;
+  activity.phase = null;
+  if (state.runningActivityId === activityId) state.runningActivityId = null;
+  saveState();
+  if (!opts.skipRender) render();
+}
+
+function newSession() {
+  if (state.status === "running" || (state.status === "finished" && state.activities.length)) {
+    const ok = confirm("¿Descartar la sesión actual y empezar una nueva? Si no exportaste el CSV se perderán los datos.");
+    if (!ok) return;
+  }
+  state = freshSession();
+  saveState();
+  render();
+}
+
+/* ---------- Derived stats ---------- */
+
+function segmentDurationMs(segment, nowMs) {
+  const startMs = Date.parse(segment.startedAt);
+  const endMs = segment.endedAt ? Date.parse(segment.endedAt) : nowMs;
+  return Math.max(0, endMs - startMs);
+}
+
+function activityStats(activity, nowMs = Date.now()) {
+  let bipMs = 0;
+  let bopMs = 0;
+  for (const seg of activity.segments) {
+    const d = segmentDurationMs(seg, nowMs);
+    if (seg.phase === "BIP") bipMs += d;
+    else bopMs += d;
+  }
+  const totalMs = bipMs + bopMs;
+  const pct = totalMs > 0 ? (bipMs / totalMs) * 100 : 0;
+  const ratio = bopMs > 0 ? bipMs / bopMs : (bipMs > 0 ? Infinity : 0);
+  return { bipMs, bopMs, totalMs, pct, ratio };
+}
+
+function formatRatio(ratio) {
+  if (!Number.isFinite(ratio)) return bipOnlyLabel(ratio);
+  if (ratio === 0) return "0:1";
+  if (ratio >= 1) return `${ratio.toFixed(1)}:1`;
+  return `1:${(1 / ratio).toFixed(1)}`;
+}
+function bipOnlyLabel(ratio) {
+  return ratio > 0 ? "solo BIP" : "—";
+}
+
+function sessionAggregates() {
+  const sourceCounts = { scrum: 0, lineout: 0, open: 0, kick: 0 };
+  const eventCounts = { RUCK: 0, KICK: 0 };
+  state.activities.forEach((activity) => {
+    activity.segments.forEach((seg) => {
+      if (seg.phase === "BIP" && seg.source in sourceCounts) sourceCounts[seg.source]++;
+    });
+    activity.events.forEach((ev) => {
+      if (ev.type in eventCounts) eventCounts[ev.type]++;
+    });
+  });
+  return { sourceCounts, eventCounts };
+}
+
+/* ---------- CSV export ---------- */
+
+function buildCsv() {
+  const headers = [
+    "session_id", "session_start_time", "session_end_time", "session_duration_s",
+    "activity_name", "activity_start_time", "activity_end_time", "activity_duration_s",
+    "bip_duration_s", "bop_duration_s", "bip_percent", "work_rest_ratio",
+    "ruck_count", "kick_event_count"
+  ];
+  const sessionDurationS = Math.round(clockElapsedMs(state.clock) / 1000);
+  const rows = state.activities.map((activity) => {
+    const stats = activityStats(activity);
+    return [
+      state.id,
+      state.startedAt || "",
+      state.endedAt || "",
+      sessionDurationS,
+      csvEscape(activity.name),
+      activity.startedAt || "",
+      activity.endedAt || "",
+      Math.round(stats.totalMs / 1000),
+      Math.round(stats.bipMs / 1000),
+      Math.round(stats.bopMs / 1000),
+      stats.pct.toFixed(1),
+      Number.isFinite(stats.ratio) ? stats.ratio.toFixed(2) : "",
+      activity.events.filter((e) => e.type === "RUCK").length,
+      activity.events.filter((e) => e.type === "KICK").length
+    ].join(",");
+  });
+  return [headers.join(","), ...rows].join("\n");
+}
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportCsv() {
+  const csv = buildCsv();
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = (state.startedAt || nowIso()).replace(/[:.]/g, "-");
+  a.href = url;
+  a.download = `cronosesion_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ---------- Rendering ---------- */
+
+const el = {
+  btnNewSession: document.getElementById("btn-new-session"),
+  viewIdle: document.getElementById("view-idle"),
+  btnStartSession: document.getElementById("btn-start-session"),
+  viewSession: document.getElementById("view-session"),
+  sessionStartTime: document.getElementById("session-start-time"),
+  sessionElapsed: document.getElementById("session-elapsed"),
+  sessionEndTime: document.getElementById("session-end-time"),
+  btnFinishSession: document.getElementById("btn-finish-session"),
+  newActivityForm: document.getElementById("new-activity-form"),
+  inputActivityName: document.getElementById("input-activity-name"),
+  btnStartActivity: document.getElementById("btn-start-activity"),
+  activeActivity: document.getElementById("active-activity"),
+  activeActivityName: document.getElementById("active-activity-name"),
+  activeActivityStart: document.getElementById("active-activity-start"),
+  activeActivityElapsed: document.getElementById("active-activity-elapsed"),
+  phaseStatusBip: document.querySelector(".phase-status-item.bip"),
+  phaseStatusBop: document.querySelector(".phase-status-item.bop"),
+  liveBall: document.getElementById("live-ball"),
+  bipSourcePicker: document.getElementById("bip-source-picker"),
+  sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
+  bipActiveInfo: document.getElementById("bip-active-info"),
+  bipSourceLabel: document.getElementById("bip-source-label"),
+  btnEndBip: document.getElementById("btn-end-bip"),
+  bipTime: document.getElementById("bip-time"),
+  bopTime: document.getElementById("bop-time"),
+  bipBarFill: document.getElementById("bip-bar-fill"),
+  bipPercent: document.getElementById("bip-percent"),
+  bipRatio: document.getElementById("bip-ratio"),
+  btnLogRuck: document.getElementById("btn-log-ruck"),
+  ruckCount: document.getElementById("ruck-count"),
+  btnLogKick: document.getElementById("btn-log-kick"),
+  kickCount: document.getElementById("kick-count"),
+  btnFinishActivity: document.getElementById("btn-finish-activity"),
+  activitiesListWrap: document.getElementById("activities-list-wrap"),
+  activitiesList: document.getElementById("activities-list"),
+  sessionSummary: document.getElementById("session-summary"),
+  sumScrum: document.getElementById("sum-scrum"),
+  sumLineout: document.getElementById("sum-lineout"),
+  sumOpen: document.getElementById("sum-open"),
+  sumKickRestart: document.getElementById("sum-kick-restart"),
+  sumRuck: document.getElementById("sum-ruck"),
+  sumKickEvent: document.getElementById("sum-kick-event"),
+  btnExportCsv: document.getElementById("btn-export-csv")
+};
+
+function render() {
+  const hasSession = state.status !== "idle";
+  el.viewIdle.hidden = hasSession;
+  el.viewSession.hidden = !hasSession;
+  el.btnNewSession.hidden = !hasSession;
+
+  if (!hasSession) return;
+
+  el.sessionStartTime.textContent = fmtClockTime(state.startedAt);
+  el.sessionEndTime.textContent = state.endedAt ? fmtClockTime(state.endedAt) : "--:--:--";
+  el.btnFinishSession.hidden = state.status !== "running";
+
+  const active = currentActivity();
+  el.newActivityForm.hidden = state.status !== "running" || !!active;
+  el.activeActivity.hidden = !active;
+
+  if (active) {
+    el.activeActivityName.textContent = active.name;
+    el.activeActivityStart.textContent = fmtClockTime(active.startedAt);
+    el.phaseStatusBip.classList.toggle("active", active.phase === "BIP");
+    el.phaseStatusBop.classList.toggle("active", active.phase === "BOP");
+    el.liveBall.classList.toggle("phase-bip", active.phase === "BIP");
+    el.liveBall.classList.toggle("phase-bop", active.phase === "BOP");
+
+    const inPlay = active.phase === "BIP";
+    el.bipSourcePicker.hidden = inPlay;
+    el.bipActiveInfo.hidden = !inPlay;
+    el.btnEndBip.hidden = !inPlay;
+    if (inPlay) {
+      const openSegment = active.segments[active.segments.length - 1];
+      el.bipSourceLabel.textContent = SOURCE_LABELS[openSegment.source] || "—";
+    }
+
+    el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
+    el.kickCount.textContent = active.events.filter((e) => e.type === "KICK").length;
+  }
+
+  renderFinishedActivities();
+  renderTimeline();
+
+  el.sessionSummary.hidden = state.status !== "finished";
+  if (state.status === "finished") {
+    const { sourceCounts, eventCounts } = sessionAggregates();
+    el.sumScrum.textContent = sourceCounts.scrum;
+    el.sumLineout.textContent = sourceCounts.lineout;
+    el.sumOpen.textContent = sourceCounts.open;
+    el.sumKickRestart.textContent = sourceCounts.kick;
+    el.sumRuck.textContent = eventCounts.RUCK;
+    el.sumKickEvent.textContent = eventCounts.KICK;
+  }
+
+  tick(); // paint live numbers immediately
+  saveState();
+}
+
+function renderFinishedActivities() {
+  const finished = state.activities.filter((a) => a.status === "finished");
+  el.activitiesListWrap.hidden = finished.length === 0;
+  el.activitiesList.innerHTML = "";
+  const canResume = state.status === "running" && !state.runningActivityId
+    && state.activities.length > 0
+    && state.activities[state.activities.length - 1].status === "finished";
+  const lastActivityId = state.activities.length
+    ? state.activities[state.activities.length - 1].id
+    : null;
+
+  finished.forEach((activity) => {
+    const stats = activityStats(activity);
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="act-name">${escapeHtml(activity.name)}</div>
+      <div class="act-meta">
+        <span>${fmtClockTime(activity.startedAt)} → ${fmtClockTime(activity.endedAt)}</span>
+        <span>${fmtHMS(stats.totalMs)}</span>
+        <span>${stats.pct.toFixed(0)}% juego real</span>
+        <span>ratio ${formatRatio(stats.ratio)}</span>
+      </div>`;
+    if (canResume && activity.id === lastActivityId) {
+      const resumeRow = document.createElement("div");
+      resumeRow.className = "act-resume-row";
+      resumeRow.innerHTML = `<button class="resume-btn">Reanudar esta actividad</button>`;
+      resumeRow.querySelector("button").addEventListener("click", reopenLastActivity);
+      li.appendChild(resumeRow);
+    }
+    el.activitiesList.appendChild(li);
+  });
+}
+
+/* ---------- Timeline (Gantt) ---------- */
+
+function niceTickMinutes(totalMs) {
+  const totalMin = totalMs / 60000;
+  const candidates = [1, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120];
+  const target = totalMin / 5; // aim for ~5 ticks across the axis
+  return candidates.find((c) => c >= target) || candidates[candidates.length - 1];
+}
+
+function renderTimeline() {
+  const wrap = document.getElementById("timeline-wrap");
+  const axisEl = document.getElementById("timeline-axis");
+  const rowsEl = document.getElementById("timeline-rows");
+  const tooltipEl = document.getElementById("timeline-tooltip");
+
+  const finished = state.activities.filter((a) => a.status === "finished");
+  const show = state.status === "finished" && finished.length > 0 && state.startedAt && state.endedAt;
+  wrap.hidden = !show;
+  if (!show) return;
+
+  const fullStartMs = Date.parse(state.startedAt);
+  const fullEndMs = Date.parse(state.endedAt);
+  const fullSpan = Math.max(1, fullEndMs - fullStartMs);
+  const pct = (ms) => (ms / fullSpan) * 100;
+
+  function showTooltip(e, text) {
+    e.stopPropagation();
+    tooltipEl.textContent = text;
+    tooltipEl.hidden = false;
+  }
+
+  function makeSeg(kind, leftPct, widthPct, tooltipText) {
+    const seg = document.createElement("div");
+    seg.className = `timeline-seg ${kind}`;
+    seg.style.left = `${leftPct}%`;
+    seg.style.width = `${Math.max(widthPct, 0.3)}%`;
+    seg.addEventListener("click", (e) => showTooltip(e, tooltipText));
+    return seg;
+  }
+
+  function makeRuckMarker(leftPct, tooltipText) {
+    const dot = document.createElement("div");
+    dot.className = "timeline-ruck";
+    dot.style.left = `${leftPct}%`;
+    dot.addEventListener("click", (e) => showTooltip(e, tooltipText));
+    return dot;
+  }
+
+  axisEl.innerHTML = "";
+  const stepMs = niceTickMinutes(fullSpan) * 60000;
+  for (let t = 0; t <= fullSpan; t += stepMs) {
+    const tick = document.createElement("span");
+    tick.className = "tick";
+    tick.style.left = `${pct(t)}%`;
+    tick.textContent = fmtClockTime(new Date(fullStartMs + t).toISOString()).slice(0, 5);
+    axisEl.appendChild(tick);
+  }
+
+  rowsEl.innerHTML = "";
+  const sorted = [...finished].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  sorted.forEach((activity) => {
+    const stats = activityStats(activity);
+    const actStartMs = Date.parse(activity.startedAt);
+    const actEndMs = Date.parse(activity.endedAt);
+
+    const row = document.createElement("div");
+    row.className = "timeline-row";
+
+    const label = document.createElement("div");
+    label.className = "timeline-row-label";
+    label.innerHTML = `<span>${escapeHtml(activity.name)}</span><span class="pct">${stats.pct.toFixed(0)}%</span>`;
+    row.appendChild(label);
+
+    const track = document.createElement("div");
+    track.className = "timeline-track";
+    const fill = document.createElement("div");
+    fill.className = "timeline-fill";
+    track.appendChild(fill);
+
+    if (actStartMs > fullStartMs) {
+      fill.appendChild(makeSeg("gap", 0, pct(actStartMs - fullStartMs), "Sin actividad registrada"));
+    }
+
+    activity.segments.forEach((seg) => {
+      const segStartMs = Date.parse(seg.startedAt);
+      const segEndMs = seg.endedAt ? Date.parse(seg.endedAt) : actEndMs;
+      const left = pct(segStartMs - fullStartMs);
+      const width = pct(Math.max(0, segEndMs - segStartMs));
+      const phaseLabel = seg.phase === "BIP"
+        ? `BIP · balón en juego (${SOURCE_LABELS[seg.source] || "origen desconocido"})`
+        : "BOP · fuera de juego";
+      const text = `${phaseLabel} — ${fmtClockTime(seg.startedAt)}–${fmtClockTime(seg.endedAt || activity.endedAt)} (${fmtHMS(segEndMs - segStartMs)})`;
+      fill.appendChild(makeSeg(seg.phase.toLowerCase(), left, width, text));
+    });
+
+    if (actEndMs < fullEndMs) {
+      fill.appendChild(makeSeg("gap", pct(actEndMs - fullStartMs), pct(fullEndMs - actEndMs), "Sin actividad registrada"));
+    }
+
+    activity.events.forEach((ev) => {
+      const left = pct(Date.parse(ev.at) - fullStartMs);
+      const label = ev.type === "RUCK" ? "Ruck" : "Patada en juego";
+      track.appendChild(makeRuckMarker(left, `${label} — ${fmtClockTime(ev.at)}`));
+    });
+
+    row.appendChild(track);
+    rowsEl.appendChild(row);
+  });
+
+  tooltipEl.hidden = true;
+}
+
+document.addEventListener("click", () => {
+  const t = document.getElementById("timeline-tooltip");
+  if (t) t.hidden = true;
+});
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+/* Lightweight per-second refresh of live numbers only (no full re-render,
+   so typing in the activity-name input or tapping buttons stays snappy). */
+function tick() {
+  if (state.status === "idle") return;
+  const now = Date.now();
+
+  el.sessionElapsed.textContent = fmtHMS(clockElapsedMs(state.clock, now));
+
+  const active = currentActivity();
+  if (active) {
+    const stats = activityStats(active, now);
+    el.activeActivityElapsed.textContent = fmtHMS(stats.totalMs);
+    el.bipTime.textContent = fmtMS(stats.bipMs);
+    el.bopTime.textContent = fmtMS(stats.bopMs);
+    el.bipBarFill.style.width = `${stats.pct.toFixed(1)}%`;
+    el.bipPercent.textContent = `${stats.pct.toFixed(0)}% juego real`;
+    el.bipRatio.textContent = formatRatio(stats.ratio);
+  }
+}
+
+setInterval(tick, 500);
+
+/* ---------- Wire up events ---------- */
+
+el.btnStartSession.addEventListener("click", startSession);
+el.btnFinishSession.addEventListener("click", () => {
+  if (confirm("¿Finalizar la sesión?")) finishSession();
+});
+el.btnStartActivity.addEventListener("click", () => {
+  startActivity(el.inputActivityName.value);
+  el.inputActivityName.value = "";
+});
+el.inputActivityName.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el.btnStartActivity.click();
+});
+el.sourceButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const active = currentActivity();
+    if (active) startBip(active.id, btn.dataset.source);
+  });
+});
+el.btnEndBip.addEventListener("click", () => {
+  const active = currentActivity();
+  if (active) endBip(active.id);
+});
+el.btnLogRuck.addEventListener("click", () => {
+  const active = currentActivity();
+  if (active) logEvent(active.id, "RUCK");
+});
+el.btnLogKick.addEventListener("click", () => {
+  const active = currentActivity();
+  if (active) logEvent(active.id, "KICK");
+});
+el.btnFinishActivity.addEventListener("click", () => {
+  const active = currentActivity();
+  if (active) finishActivity(active.id);
+});
+el.btnExportCsv.addEventListener("click", exportCsv);
+el.btnNewSession.addEventListener("click", newSession);
+
+window.addEventListener("beforeunload", saveState);
+
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
