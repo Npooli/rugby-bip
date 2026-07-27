@@ -91,6 +91,7 @@
       </div>
 
       <div id="live-ball-wrap" class="live-ball-wrap">
+        <div id="live-ball-ring" class="live-ball-ring"></div>
         <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="52" height="52" aria-hidden="true">
           <ellipse cx="50" cy="30" rx="44" ry="25"/>
           <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
@@ -132,8 +133,16 @@
       <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
 
       <div class="tag-row">
-        <button id="btn-log-ruck" class="tag-btn">+1 Ruck <span id="ruck-count" class="tag-count">0</span></button>
-        <button id="btn-log-kick" class="tag-btn">+1 Patada <span id="kick-count" class="tag-count">0</span></button>
+        <button id="btn-log-ruck" class="tag-btn tag-btn-primary">
+          <span class="material-symbols-outlined" aria-hidden="true">sports_rugby</span>
+          <span class="tag-btn-label">RUCK</span>
+          <span id="ruck-count" class="tag-count">0</span>
+        </button>
+        <button id="btn-log-kick" class="tag-btn tag-btn-secondary">
+          <span class="material-symbols-outlined" aria-hidden="true">sports_soccer</span>
+          <span class="tag-btn-label">PATADA</span>
+          <span id="kick-count" class="tag-count">0</span>
+        </button>
       </div>
 
       <div class="live-feed-header">
