@@ -96,21 +96,21 @@ h1, h2, h3, .value.big, .stat-number {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  width: 220px;
-  height: 220px;
-  margin: 8px auto 24px;
+  gap: 4px;
+  width: 140px;
+  height: 140px;
+  margin: 4px auto 14px;
   border-radius: 999px;
-  border: 8px solid var(--panel-high);
+  border: 6px solid var(--panel-high);
   background: var(--panel-high);
   transition: box-shadow 0.4s ease, border-color 0.4s ease;
 }
 
 .live-ball-ring {
   position: absolute;
-  inset: -8px;
+  inset: -6px;
   border-radius: 999px;
-  border: 4px solid var(--muted);
+  border: 3px solid var(--muted);
   border-top-color: transparent;
   opacity: 0.5;
   animation: ring-spin 3s linear infinite;
@@ -170,7 +170,7 @@ h1, h2, h3, .value.big, .stat-number {
 
 #live-ball-phase {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -404,6 +404,20 @@ main {
   opacity: 0.7;
 }
 
+/* Thumb zone: everything tapped live (restart origin, BOP toggle, ruck/kick)
+   lives in here, sticky to the bottom of the viewport so it stays reachable
+   with one hand even while the feed/stats above it scroll out of view. */
+.live-controls-zone {
+  position: sticky;
+  bottom: 0;
+  background: var(--panel);
+  margin: 0 -20px -20px;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--panel-border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  z-index: 3;
+}
+
 .source-hint {
   text-align: center;
   margin: 0 0 8px;
@@ -449,6 +463,17 @@ main {
   text-transform: uppercase;
 }
 
+.feed-undo-btn {
+  margin-left: auto;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.feed-undo-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .live-feed-dot {
   width: 7px;
   height: 7px;
@@ -469,7 +494,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 220px;
+  max-height: 160px;
   overflow-y: auto;
 }
 
@@ -482,6 +507,25 @@ main {
   border-left: 3px solid var(--panel-border);
   background: var(--panel-high);
   font-size: 13px;
+}
+
+.live-feed-list li .feed-text {
+  flex: 1;
+}
+
+.feed-delete-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.feed-delete-btn:active {
+  color: var(--danger);
 }
 
 .live-feed-list li.feed-bip { border-left-color: var(--bip); }

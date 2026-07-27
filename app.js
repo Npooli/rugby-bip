@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "cronosesion.session.v1";
-const SCHEMA_VERSION = 5; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
+const SCHEMA_VERSION = 6; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
 
 const SOURCE_LABELS = {
   scrum: "Scrum",
@@ -189,7 +189,7 @@ function startActivity(name) {
     // "measures BIP" isn't a separate flag — it's simply whether a BIP
     // segment ever shows up here. Tag a restart source at any point to
     // start counting; never tag one and it just stays a plain timer.
-    segments: [{ phase: "BOP", startedAt: t, endedAt: null }],
+    segments: [{ id: uid(), phase: "BOP", startedAt: t, endedAt: null }],
     // Point-in-time occurrences (no duration), e.g. rucks.
     events: []
   };
@@ -209,7 +209,7 @@ function startBip(activityId, source) {
   if (!activity || activity.status !== "running" || activity.phase === "BIP") return;
   const t = nowIso();
   closeOpenSegment(activity, t);
-  activity.segments.push({ phase: "BIP", source, startedAt: t, endedAt: null });
+  activity.segments.push({ id: uid(), phase: "BIP", source, startedAt: t, endedAt: null });
   activity.phase = "BIP";
   saveState();
   render();
@@ -220,7 +220,7 @@ function endBip(activityId) {
   if (!activity || activity.status !== "running" || activity.phase !== "BIP") return;
   const t = nowIso();
   closeOpenSegment(activity, t);
-  activity.segments.push({ phase: "BOP", startedAt: t, endedAt: null });
+  activity.segments.push({ id: uid(), phase: "BOP", startedAt: t, endedAt: null });
   activity.phase = "BOP";
   saveState();
   render();
@@ -264,6 +264,37 @@ function finishActivity(activityId, atIso, opts = {}) {
   if (state.runningActivityId === activityId) state.runningActivityId = null;
   saveState();
   if (!opts.skipRender) render();
+}
+
+/* Removes a single Live Feed line and keeps the timeline consistent:
+   - an event (ruck/kick) is just spliced out, nothing else depends on it.
+   - a segment (a BIP/BOP phase change) is merged into the segment right
+     before it, as if that particular toggle never happened — the previous
+     segment's endedAt is extended to swallow the removed one, so a segment
+     that follows (if any) still starts exactly where the merged one now
+     ends, and no gap or overlap is introduced. The activity's very first
+     segment (its opening BOP, created the instant the activity started)
+     can't be merged into anything before it, so it's not deletable. */
+function undoFeedItem(activity, refType, refId) {
+  if (refType === "event") {
+    const idx = activity.events.findIndex((e) => e.id === refId);
+    if (idx === -1) return;
+    activity.events.splice(idx, 1);
+  } else if (refType === "segment") {
+    const idx = activity.segments.findIndex((s) => s.id === refId);
+    if (idx <= 0) return;
+    const removed = activity.segments[idx];
+    const prev = activity.segments[idx - 1];
+    prev.endedAt = removed.endedAt;
+    activity.segments.splice(idx, 1);
+    if (activity.segments[activity.segments.length - 1] === prev) {
+      activity.phase = prev.phase;
+    }
+  } else {
+    return;
+  }
+  saveState();
+  render();
 }
 
 function newSession() {
@@ -493,6 +524,7 @@ function buildSessionFromAngles(segments, anchorMs) {
     status: "finished",
     phase: null,
     segments: segments.map((s) => ({
+      id: uid(),
       phase: s.phase,
       startedAt: toIso(s.startMs),
       endedAt: toIso(s.endMs)
@@ -562,6 +594,7 @@ const el = {
   btnLogKick: document.getElementById("btn-log-kick"),
   kickCount: document.getElementById("kick-count"),
   liveFeedList: document.getElementById("live-feed-list"),
+  btnUndoLast: document.getElementById("btn-undo-last"),
   btnFinishActivity: document.getElementById("btn-finish-activity"),
   activitiesListWrap: document.getElementById("activities-list-wrap"),
   activitiesList: document.getElementById("activities-list"),
@@ -663,28 +696,39 @@ const FEED_MAX_ITEMS = 8;
 /* A chronological feed of what just happened in the current activity —
    restart taps, BOP switches, ruck/kick counts — newest first. Built fresh
    from segments/events each render rather than stored separately, so it
-   can never drift out of sync with the data that drives the stats. */
-function renderLiveFeed(activity) {
+   can never drift out of sync with the data that drives the stats. Each
+   item carries enough (refType/refId) to be individually undone — except
+   the activity's very first segment (its opening BOP), which can't be
+   merged into anything earlier and so isn't deletable. */
+function buildFeedItems(activity) {
   const items = [];
-  activity.segments.forEach((seg) => {
+  activity.segments.forEach((seg, idx) => {
+    const canUndo = idx > 0;
     if (seg.phase === "BIP") {
-      items.push({ at: seg.startedAt, kind: "feed-bip", text: `BIP iniciado — ${SOURCE_LABELS[seg.source] || "origen desconocido"}` });
+      items.push({ at: seg.startedAt, kind: "feed-bip", text: `BIP iniciado — ${SOURCE_LABELS[seg.source] || "origen desconocido"}`, refType: "segment", refId: seg.id, canUndo });
     } else {
-      items.push({ at: seg.startedAt, kind: "feed-bop", text: "BOP — fuera de juego" });
+      items.push({ at: seg.startedAt, kind: "feed-bop", text: "BOP — fuera de juego", refType: "segment", refId: seg.id, canUndo });
     }
   });
   activity.events.forEach((ev) => {
-    items.push({ at: ev.at, kind: "feed-event", text: ev.type === "RUCK" ? "+1 Ruck" : "+1 Patada en juego" });
+    items.push({ at: ev.at, kind: "feed-event", text: ev.type === "RUCK" ? "+1 Ruck" : "+1 Patada en juego", refType: "event", refId: ev.id, canUndo: true });
   });
-
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return items;
+}
+
+function renderLiveFeed(activity) {
+  const items = buildFeedItems(activity);
   const latest = items.slice(0, FEED_MAX_ITEMS);
+
+  el.btnUndoLast.disabled = !(items[0] && items[0].canUndo);
 
   el.liveFeedList.innerHTML = latest.length
     ? latest.map((item) => `
         <li class="${item.kind}">
           <time>${fmtClockTime(item.at)}</time>
-          <span>${escapeHtml(item.text)}</span>
+          <span class="feed-text">${escapeHtml(item.text)}</span>
+          ${item.canUndo ? `<button class="feed-delete-btn" type="button" data-ref-type="${item.refType}" data-ref-id="${item.refId}" aria-label="Borrar este evento">✕</button>` : ""}
         </li>`).join("")
     : `<li class="live-feed-empty" style="border:none;background:none;">Sin eventos todavía</li>`;
 }
@@ -958,7 +1002,20 @@ el.btnLogKick.addEventListener("click", () => {
 });
 el.btnFinishActivity.addEventListener("click", () => {
   const active = currentActivity();
-  if (active) finishActivity(active.id);
+  if (active && confirm(`¿Finalizar la actividad "${active.name}"?`)) finishActivity(active.id);
+});
+el.liveFeedList.addEventListener("click", (e) => {
+  const btn = e.target.closest(".feed-delete-btn");
+  if (!btn) return;
+  const active = currentActivity();
+  if (!active) return;
+  undoFeedItem(active, btn.dataset.refType, btn.dataset.refId);
+});
+el.btnUndoLast.addEventListener("click", () => {
+  const active = currentActivity();
+  if (!active) return;
+  const items = buildFeedItems(active);
+  if (items[0] && items[0].canUndo) undoFeedItem(active, items[0].refType, items[0].refId);
 });
 el.btnExportCsv.addEventListener("click", exportCsv);
 el.btnExportPdf.addEventListener("click", () => window.print());

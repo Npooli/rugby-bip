@@ -101,7 +101,7 @@
 
       <div id="live-ball-wrap" class="live-ball-wrap">
         <div id="live-ball-ring" class="live-ball-ring"></div>
-        <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="52" height="52" aria-hidden="true">
+        <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="38" height="38" aria-hidden="true">
           <ellipse cx="50" cy="30" rx="44" ry="25"/>
           <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
           <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
@@ -125,46 +125,52 @@
         </div>
       </div>
 
-      <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
-      <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
-      <div id="bip-source-picker" class="source-grid">
-        <button class="source-btn" data-source="scrum">Scrum</button>
-        <button class="source-btn" data-source="lineout">Line Out</button>
-        <button class="source-btn" data-source="open">Juego libre</button>
-        <button class="source-btn" data-source="kick">Patada</button>
-      </div>
-
-      <!-- Visible cuando está en BIP: origen actual + botón para volver a BOP -->
-      <div id="bip-active-info" class="bip-active-info" hidden>
-        <span class="label">En juego desde</span>
-        <span id="bip-source-label" class="value">—</span>
-      </div>
-      <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
-
-      <div class="tag-row">
-        <button id="btn-log-ruck" class="tag-btn tag-btn-primary">
-          <span class="material-symbols-outlined" aria-hidden="true">sports_rugby</span>
-          <span class="tag-btn-label">RUCK</span>
-          <span id="ruck-count" class="tag-count">0</span>
-        </button>
-        <button id="btn-log-kick" class="tag-btn tag-btn-secondary">
-          <svg class="rugby-ball tag-btn-ball" viewBox="0 0 100 60" width="32" height="32" aria-hidden="true">
-            <ellipse cx="50" cy="30" rx="44" ry="25"/>
-            <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
-            <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
-            <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
-            <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
-          </svg>
-          <span class="tag-btn-label">KICK</span>
-          <span id="kick-count" class="tag-count">0</span>
-        </button>
-      </div>
-
+      <!-- Secundario: historial de lo que pasó. Scrollea dentro de su propio
+           espacio en vez de empujar los controles táctiles fuera de pantalla. -->
       <div class="live-feed-header">
         <h3 class="label">Live Feed</h3>
         <span class="live-feed-dot"></span>
+        <button id="btn-undo-last" class="link-btn feed-undo-btn" type="button">Deshacer último</button>
       </div>
       <ul id="live-feed-list" class="live-feed-list"></ul>
+
+      <!-- Zona del pulgar: todo lo que se toca en vivo, siempre a mano abajo. -->
+      <div id="live-controls-zone" class="live-controls-zone">
+        <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
+        <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
+        <div id="bip-source-picker" class="source-grid">
+          <button class="source-btn" data-source="scrum">Scrum</button>
+          <button class="source-btn" data-source="lineout">Line Out</button>
+          <button class="source-btn" data-source="open">Juego libre</button>
+          <button class="source-btn" data-source="kick">Patada</button>
+        </div>
+
+        <!-- Visible cuando está en BIP: origen actual + botón para volver a BOP -->
+        <div id="bip-active-info" class="bip-active-info" hidden>
+          <span class="label">En juego desde</span>
+          <span id="bip-source-label" class="value">—</span>
+        </div>
+        <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
+
+        <div class="tag-row">
+          <button id="btn-log-ruck" class="tag-btn tag-btn-primary">
+            <span class="material-symbols-outlined" aria-hidden="true">sports_rugby</span>
+            <span class="tag-btn-label">RUCK</span>
+            <span id="ruck-count" class="tag-count">0</span>
+          </button>
+          <button id="btn-log-kick" class="tag-btn tag-btn-secondary">
+            <svg class="rugby-ball tag-btn-ball" viewBox="0 0 100 60" width="32" height="32" aria-hidden="true">
+              <ellipse cx="50" cy="30" rx="44" ry="25"/>
+              <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
+              <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
+              <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
+              <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
+            </svg>
+            <span class="tag-btn-label">KICK</span>
+            <span id="kick-count" class="tag-count">0</span>
+          </button>
+        </div>
+      </div>
 
       <button id="btn-finish-activity" class="big-btn stop">Finalizar actividad</button>
     </div>
