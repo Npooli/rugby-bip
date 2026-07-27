@@ -1,4 +1,4 @@
-const CACHE_NAME = "cronosesion-v4";
+const CACHE_NAME = "cronosesion-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -29,11 +29,14 @@ self.addEventListener("activate", (event) => {
 /* Network-first: prefer the freshest app shell whenever there's a connection
    (important during development, and harmless in production), falling back
    to the cached copy only when offline — e.g. mid-session on a field with no
-   signal. */
+   signal. `cache: "no-store"` is the important bit: a plain fetch() still
+   honors GitHub Pages' `Cache-Control: max-age=600` and can silently hand
+   back a stale same-origin response without ever reaching the network —
+   this forces a real round-trip every time so deploys show up immediately. */
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
