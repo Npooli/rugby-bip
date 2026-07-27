@@ -544,9 +544,7 @@ main {
   border-color: var(--panel-border);
 }
 
-.tag-btn-secondary .material-symbols-outlined {
-  color: var(--accent);
-}
+.tag-btn-ball .seam { stroke: var(--panel-high); }
 
 .tag-count {
   background: rgba(0, 0, 0, 0.2);
