@@ -219,6 +219,26 @@ main {
   min-height: 60vh;
 }
 
+.recovery-banner {
+  margin-top: 40px;
+  border-color: var(--accent);
+}
+
+.recovery-text {
+  margin: 0 0 16px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+#btn-recovery-discard {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 10px;
+  color: var(--danger);
+}
+
 .card {
   background: rgba(30, 41, 59, 0.7);
   backdrop-filter: blur(12px);

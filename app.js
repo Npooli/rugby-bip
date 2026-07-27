@@ -73,6 +73,43 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/* ---------- Wake Lock ----------
+   Keeps the screen on for the whole time a session is running, so the
+   coach doesn't lose the live view (and the tab doesn't get backgrounded,
+   which throttles timers) mid-drill. The lock is released automatically by
+   the browser whenever the tab is hidden, so it has to be re-requested on
+   visibilitychange rather than assumed to persist. */
+
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator) || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch {
+    wakeLock = null; // unsupported, denied, or tab not visible — non-fatal
+  }
+}
+
+async function releaseWakeLockIfHeld() {
+  if (!wakeLock) return;
+  const held = wakeLock;
+  wakeLock = null;
+  try { await held.release(); } catch { /* already released */ }
+}
+
+function syncWakeLock() {
+  if (state.status === "running") requestWakeLock();
+  else releaseWakeLockIfHeld();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  syncWakeLock();
+  tick(); // repaint immediately instead of waiting for the next 500ms beat
+});
+
 /* ---------- State ---------- */
 
 let state = loadState() || freshSession();
@@ -477,6 +514,10 @@ function buildSessionFromAngles(segments, anchorMs) {
 /* ---------- Rendering ---------- */
 
 const el = {
+  recoveryBanner: document.getElementById("recovery-banner"),
+  recoveryText: document.getElementById("recovery-text"),
+  btnRecoveryContinue: document.getElementById("btn-recovery-continue"),
+  btnRecoveryDiscard: document.getElementById("btn-recovery-discard"),
   btnNewSession: document.getElementById("btn-new-session"),
   viewIdle: document.getElementById("view-idle"),
   btnStartSession: document.getElementById("btn-start-session"),
@@ -539,6 +580,8 @@ const el = {
 };
 
 function render() {
+  syncWakeLock();
+
   const hasSession = state.status !== "idle";
   el.viewIdle.hidden = hasSession;
   el.viewSession.hidden = !hasSession;
@@ -924,7 +967,39 @@ el.btnNewSession.addEventListener("click", newSession);
 
 window.addEventListener("beforeunload", saveState);
 
+/* On a fresh page load (tab was closed, crashed, or reopened later — not a
+   re-render within the same load) a "running" session restored from
+   localStorage might be minutes or days old. The session view renders
+   normally either way (this is just a notice layered on top, not a gate —
+   ignoring it and tapping straight into the live controls is equivalent to
+   choosing "continue"), but a visible banner means the coach is never
+   silently dropped back into old data without knowing it happened. A
+   "finished" session doesn't need this — it's already complete and just
+   waiting to be exported. */
+function maybeOfferSessionRecovery() {
+  if (state.status !== "running") return;
+  const startedLabel = fmtClockTime(state.startedAt);
+  const elapsedLabel = fmtHMS(clockElapsedMs(state.clock));
+  const activityNote = currentActivity() ? ` (actividad "${escapeHtml(currentActivity().name)}" en curso)` : "";
+  el.recoveryText.innerHTML = `Empezó a las <strong>${startedLabel}</strong> y lleva <strong>${elapsedLabel}</strong>${activityNote}. ¿Querés seguir con ella o descartarla y empezar de cero?`;
+  el.recoveryBanner.hidden = false;
+}
+
+el.btnRecoveryContinue.addEventListener("click", () => {
+  el.recoveryBanner.hidden = true;
+});
+
+el.btnRecoveryDiscard.addEventListener("click", () => {
+  const ok = confirm("¿Descartar esta sesión sin exportar? No se puede deshacer.");
+  if (!ok) return;
+  state = freshSession();
+  saveState();
+  el.recoveryBanner.hidden = true;
+  render();
+});
+
 render();
+maybeOfferSessionRecovery();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

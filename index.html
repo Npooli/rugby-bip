@@ -32,6 +32,15 @@
 
 <main id="app">
 
+  <!-- Se muestra en vez de todo lo demás si al cargar la app hay una sesión
+       que quedó corriendo (cierre de pestaña, recarga, crash) -->
+  <section id="recovery-banner" class="card recovery-banner" hidden>
+    <h2>Sesión sin finalizar</h2>
+    <p id="recovery-text" class="recovery-text"></p>
+    <button id="btn-recovery-continue" class="big-btn start">Continuar sesión</button>
+    <button id="btn-recovery-discard" class="link-btn">Descartar y empezar de cero</button>
+  </section>
+
   <!-- Estado: sin sesión iniciada -->
   <section id="view-idle" class="view">
     <button id="btn-start-session" class="big-btn start">Iniciar sesión</button>
