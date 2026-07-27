@@ -7,16 +7,31 @@
   --panel-border: rgba(144, 144, 151, 0.2);
   --panel-border-strong: rgba(144, 144, 151, 0.4);
   --text: #dce2f8;
-  --muted: #909097;
+  /* Brightened from #909097 — the original passed AA by a hair (~5:1) on
+     paper, but small uppercase labels at that ratio wash out at arm's
+     length in direct sun. This version holds ~7-8:1 on every background it
+     appears on. */
+  --muted: #b8b8c2;
   --accent: #ffc640;
-  --accent-bright: #ffd670;
-  --accent-ink: #402d00;
   --data-gold: #c29b40;
   --danger: #ef4444;
+  /* Neutral primary actions (Iniciar sesión/actividad, Importar XML,
+     exportar, Ruck) live here instead of on --accent, which used to do
+     double duty as both "primary button" and "BOP" — the same amber
+     showing up as a CTA in one spot and as a game-state warning in
+     another. Now --accent/--bop are reserved for that one meaning only. */
+  --action: #3457d5;
+  --action-bright: #6c8ff2;
+  --action-ink: #ffffff;
   /* Good/warning status pair — kept distinct from brand chrome. Always
-     paired with a text label, never used as the sole carrier of meaning. */
-  --bip: #22c55e;
-  --bop: #fab219;
+     paired with a text label, never used as the sole carrier of meaning.
+     Deliberately pushed apart in *lightness*, not just hue: the original
+     green/amber were nearly the same luminance (a colorblind or grayscale
+     view saw two shades of "medium gray"). Bip is now the brighter of the
+     two, bop the deeper/richer one, while both still clear AA text
+     contrast on dark panels. */
+  --bip: #4ade80;
+  --bop: #d1840a;
   --gap: #7c88a0;
   /* Categorical slot — used only for "activity happened but BIP wasn't
      tagged", kept distinct from the bip/bop/gap trio so it never reads as
@@ -134,13 +149,13 @@ h1, h2, h3, .value.big, .stat-number {
 }
 
 .live-ball-wrap.pulse-bip {
-  border-color: rgba(34, 197, 94, 0.45);
-  box-shadow: 0 0 60px rgba(34, 197, 94, 0.35), inset 0 0 30px rgba(34, 197, 94, 0.08);
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 0 60px rgba(74, 222, 128, 0.35), inset 0 0 30px rgba(74, 222, 128, 0.08);
 }
 
 .live-ball-wrap.pulse-bop {
-  border-color: rgba(250, 178, 25, 0.4);
-  box-shadow: 0 0 45px rgba(250, 178, 25, 0.2);
+  border-color: rgba(209, 132, 10, 0.4);
+  box-shadow: 0 0 45px rgba(209, 132, 10, 0.2);
 }
 
 .live-ball {
@@ -196,7 +211,7 @@ h1, h2, h3, .value.big, .stat-number {
 .link-btn {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--action-bright);
   font-size: 15px;
   font-weight: 600;
   padding: 6px 4px;
@@ -216,12 +231,23 @@ main {
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  min-height: 60vh;
+  /* Centers within the space actually left over between the topbar and the
+     footer, instead of a flat 60vh guess — on most phones that flat value
+     left a large dead strip below "Importar XML" before the footer. */
+  min-height: calc(100dvh - 190px);
+}
+
+.idle-tagline {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .recovery-banner {
   margin-top: 40px;
-  border-color: var(--accent);
+  border-color: var(--action);
 }
 
 .recovery-text {
@@ -288,6 +314,7 @@ main {
 
 .label {
   font-size: 12px;
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -318,13 +345,13 @@ main {
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
 
-.big-btn.start { background: var(--accent); color: var(--accent-ink); }
+.big-btn.start { background: var(--action); color: var(--action-ink); }
 .big-btn.stop { background: var(--danger); }
-.big-btn.export { background: var(--accent); color: var(--accent-ink); }
+.big-btn.export { background: var(--action); color: var(--action-ink); }
 .big-btn.export-outline {
   background: transparent;
-  color: var(--accent-bright);
-  border: 1.5px solid var(--accent);
+  color: var(--action-bright);
+  border: 1.5px solid var(--action);
 }
 
 .big-btn:active { opacity: 0.85; transform: scale(0.98); }
@@ -388,14 +415,14 @@ main {
 .phase-status-item.bip.active {
   opacity: 1;
   border-color: var(--bip);
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(74, 222, 128, 0.15);
   color: var(--bip);
 }
 
 .phase-status-item.bop.active {
   opacity: 1;
   border-color: var(--bop);
-  background: rgba(250, 178, 25, 0.15);
+  background: rgba(209, 132, 10, 0.15);
   color: var(--bop);
 }
 
@@ -448,7 +475,7 @@ main {
 
 .source-btn:active {
   border-color: var(--bip);
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .live-feed-header {
@@ -530,7 +557,7 @@ main {
 
 .live-feed-list li.feed-bip { border-left-color: var(--bip); }
 .live-feed-list li.feed-bop { border-left-color: var(--bop); }
-.live-feed-list li.feed-event { border-left-color: var(--accent); }
+.live-feed-list li.feed-event { border-left-color: var(--action); }
 
 .live-feed-list time {
   font-family: var(--font-mono);
@@ -597,9 +624,9 @@ main {
 }
 
 .tag-btn-primary {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
+  background: var(--action);
+  color: var(--action-ink);
+  border-color: var(--action);
 }
 
 .tag-btn-secondary {
@@ -639,14 +666,14 @@ main {
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--bip);
   letter-spacing: -0.01em;
 }
 
 .bip-bar {
   height: 6px;
   border-radius: 999px;
-  background: rgba(250, 178, 25, 0.3);
+  background: rgba(209, 132, 10, 0.3);
   overflow: hidden;
   margin-top: 2px;
 }
