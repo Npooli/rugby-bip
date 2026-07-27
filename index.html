@@ -78,14 +78,30 @@
         <div><span class="label">Duración</span><span id="active-activity-elapsed" class="value big">00:00:00</span></div>
       </div>
 
+      <div class="live-stats-grid">
+        <div class="live-stat-tile">
+          <span class="label">Juego real</span>
+          <div id="bip-percent" class="live-stat-number">0%</div>
+          <div class="bip-bar"><div id="bip-bar-fill" class="bip-bar-fill"></div></div>
+        </div>
+        <div class="live-stat-tile">
+          <span class="label">Ratio trabajo:descanso</span>
+          <div id="bip-ratio" class="live-stat-number">—</div>
+        </div>
+      </div>
+
       <div id="live-ball-wrap" class="live-ball-wrap">
-        <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="40" height="40" aria-hidden="true">
+        <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="52" height="52" aria-hidden="true">
           <ellipse cx="50" cy="30" rx="44" ry="25"/>
           <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
           <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
           <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
           <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
         </svg>
+        <div id="live-ball-label" class="live-ball-label">
+          <span id="live-ball-phase">—</span>
+          <span id="live-ball-sub" class="live-ball-sub">Iniciá una fase</span>
+        </div>
       </div>
 
       <div id="phase-status-row" class="phase-status">
@@ -114,15 +130,6 @@
         <span id="bip-source-label" class="value">—</span>
       </div>
       <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
-
-      <div id="bip-percent-row" class="bip-percent-row">
-        <div class="bip-bar"><div id="bip-bar-fill" class="bip-bar-fill"></div></div>
-        <span id="bip-percent" class="bip-percent-label">0% juego real</span>
-      </div>
-      <div id="ratio-row" class="ratio-row">
-        <span class="label">Ratio trabajo:descanso</span>
-        <span id="bip-ratio" class="value">—</span>
-      </div>
 
       <div class="tag-row">
         <button id="btn-log-ruck" class="tag-btn">+1 Ruck <span id="ruck-count" class="tag-count">0</span></button>

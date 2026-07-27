@@ -503,6 +503,8 @@ const el = {
   phaseStatusBop: document.querySelector(".phase-status-item.bop"),
   liveBall: document.getElementById("live-ball"),
   liveBallWrap: document.getElementById("live-ball-wrap"),
+  liveBallPhase: document.getElementById("live-ball-phase"),
+  liveBallSub: document.getElementById("live-ball-sub"),
   bipSourceHint: document.getElementById("bip-source-hint"),
   bipSourcePicker: document.getElementById("bip-source-picker"),
   sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
@@ -569,7 +571,13 @@ function render() {
     el.btnEndBip.hidden = !inPlay;
     if (inPlay) {
       const openSegment = active.segments[active.segments.length - 1];
-      el.bipSourceLabel.textContent = SOURCE_LABELS[openSegment.source] || "—";
+      const sourceLabel = SOURCE_LABELS[openSegment.source] || "—";
+      el.bipSourceLabel.textContent = sourceLabel;
+      el.liveBallPhase.textContent = "BIP";
+      el.liveBallSub.textContent = sourceLabel;
+    } else {
+      el.liveBallPhase.textContent = "BOP";
+      el.liveBallSub.textContent = "Fuera de juego";
     }
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
@@ -822,7 +830,7 @@ function tick() {
     el.bipTime.textContent = fmtMS(stats.bipMs);
     el.bopTime.textContent = fmtMS(stats.bopMs);
     el.bipBarFill.style.width = `${stats.pct.toFixed(1)}%`;
-    el.bipPercent.textContent = `${stats.pct.toFixed(0)}% juego real`;
+    el.bipPercent.textContent = `${stats.pct.toFixed(0)}%`;
     el.bipRatio.textContent = formatRatio(stats.ratio);
   }
 }
