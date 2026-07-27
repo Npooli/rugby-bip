@@ -731,6 +731,13 @@ main {
   cursor: pointer;
 }
 
+.metric-note {
+  margin: -8px 0 18px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .summary-subhead {
   margin: 0 0 8px;
   font-size: 12px;
@@ -1029,6 +1036,10 @@ main {
 
   .card h2, .summary-subhead, .label, .value {
     color: #111 !important;
+  }
+
+  .metric-note {
+    color: #555 !important;
   }
 
   .summary-grid > div, #activities-list li, .timeline-track {

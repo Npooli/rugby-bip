@@ -357,6 +357,31 @@ function sessionAggregates() {
   return { sourceCounts, eventCounts };
 }
 
+/* Session-wide "% Juego real": bipMs / (bipMs + bopMs), summed only across
+   activities that actually tagged a BIP source at some point (activityStats'
+   `tracked` flag). Activities that were only ever timed as a plain BOP block
+   (nothing tagged) are left out of both sides of the ratio entirely — folding
+   their time into the denominator would silently drag the session's % down
+   for a reason that has nothing to do with how much the team actually
+   played, just which activities the coach happened to tag. */
+function sessionBipStats() {
+  const finished = state.activities.filter((a) => a.status === "finished");
+  let bipMs = 0;
+  let bopMs = 0;
+  let trackedCount = 0;
+  finished.forEach((activity) => {
+    const stats = activityStats(activity);
+    if (!stats.tracked) return;
+    bipMs += stats.bipMs;
+    bopMs += stats.bopMs;
+    trackedCount++;
+  });
+  const totalMs = bipMs + bopMs;
+  const pct = totalMs > 0 ? (bipMs / totalMs) * 100 : 0;
+  const ratio = bopMs > 0 ? bipMs / bopMs : (bipMs > 0 ? Infinity : 0);
+  return { bipMs, bopMs, totalMs, pct, ratio, trackedCount, totalCount: finished.length };
+}
+
 const BIP_STREAK_BUCKETS = [
   { label: "0-20\"", min: 0, max: 20 },
   { label: "20-40\"", min: 20, max: 40 },
@@ -599,12 +624,19 @@ const el = {
   activitiesListWrap: document.getElementById("activities-list-wrap"),
   activitiesList: document.getElementById("activities-list"),
   sessionSummary: document.getElementById("session-summary"),
+  sumBipPercent: document.getElementById("sum-bip-percent"),
+  sumBipRatio: document.getElementById("sum-bip-ratio"),
+  bipPercentNote: document.getElementById("bip-percent-note"),
   sumScrum: document.getElementById("sum-scrum"),
   sumLineout: document.getElementById("sum-lineout"),
   sumOpen: document.getElementById("sum-open"),
   sumKickRestart: document.getElementById("sum-kick-restart"),
   sumRuck: document.getElementById("sum-ruck"),
   sumKickEvent: document.getElementById("sum-kick-event"),
+  sumRuckPerMin: document.getElementById("sum-ruck-per-min"),
+  sumRuckPerBipMin: document.getElementById("sum-ruck-per-bip-min"),
+  sumKickPerMin: document.getElementById("sum-kick-per-min"),
+  sumKickPerBipMin: document.getElementById("sum-kick-per-bip-min"),
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
   btnExportCsv: document.getElementById("btn-export-csv"),
@@ -666,6 +698,13 @@ function render() {
 
   el.sessionSummary.hidden = state.status !== "finished";
   if (state.status === "finished") {
+    const bipAgg = sessionBipStats();
+    el.sumBipPercent.textContent = bipAgg.totalMs > 0 ? `${bipAgg.pct.toFixed(0)}%` : "—";
+    el.sumBipRatio.textContent = bipAgg.totalMs > 0 ? formatRatio(bipAgg.ratio) : "—";
+    el.bipPercentNote.textContent = bipAgg.totalCount > bipAgg.trackedCount
+      ? `Calculado sobre ${bipAgg.trackedCount} de ${bipAgg.totalCount} actividades (las que midieron BIP). No incluye el tiempo de las actividades sin medir.`
+      : `Calculado sobre las ${bipAgg.trackedCount} actividades de la sesión.`;
+
     const { sourceCounts, eventCounts } = sessionAggregates();
     el.sumScrum.textContent = sourceCounts.scrum;
     el.sumLineout.textContent = sourceCounts.lineout;
@@ -673,6 +712,14 @@ function render() {
     el.sumKickRestart.textContent = sourceCounts.kick;
     el.sumRuck.textContent = eventCounts.RUCK;
     el.sumKickEvent.textContent = eventCounts.KICK;
+
+    const sessionMin = clockElapsedMs(state.clock) / 60000;
+    const bipMin = bipAgg.bipMs / 60000;
+    const perMin = (count, minutes) => (minutes > 0 ? (count / minutes).toFixed(1) : "—");
+    el.sumRuckPerMin.textContent = perMin(eventCounts.RUCK, sessionMin);
+    el.sumRuckPerBipMin.textContent = perMin(eventCounts.RUCK, bipMin);
+    el.sumKickPerMin.textContent = perMin(eventCounts.KICK, sessionMin);
+    el.sumKickPerBipMin.textContent = perMin(eventCounts.KICK, bipMin);
 
     const { buckets, longest } = bipStreakStats();
     el.wcsStat.innerHTML = longest

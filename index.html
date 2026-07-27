@@ -46,9 +46,9 @@
     <button id="btn-start-session" class="big-btn start">Iniciar sesión</button>
 
     <div class="import-section">
-      <button id="btn-show-import" class="link-btn">Importar XML de Angles</button>
+      <button id="btn-show-import" class="link-btn">Importar XML</button>
       <div id="import-form" class="card" hidden>
-        <h2>Importar sesión desde Angles</h2>
+        <h2>Importar sesión desde XML</h2>
         <input type="file" id="import-file-input" accept=".xml">
         <p id="import-status" class="import-status"></p>
         <div id="import-anchor-row" hidden>
@@ -202,6 +202,13 @@
     <div id="session-summary" class="card" hidden>
       <h2>Resumen de la sesión</h2>
 
+      <h3 class="summary-subhead">Juego real (sesión)</h3>
+      <div class="summary-grid">
+        <div><span class="label">% Juego real</span><span id="sum-bip-percent" class="value">—</span></div>
+        <div><span class="label">Ratio trabajo:descanso</span><span id="sum-bip-ratio" class="value">—</span></div>
+      </div>
+      <p id="bip-percent-note" class="metric-note"></p>
+
       <h3 class="summary-subhead">Reinicios de juego</h3>
       <div class="summary-grid">
         <div><span class="label">Scrum</span><span id="sum-scrum" class="value">0</span></div>
@@ -214,6 +221,14 @@
       <div class="summary-grid">
         <div><span class="label">Rucks</span><span id="sum-ruck" class="value">0</span></div>
         <div><span class="label">Patadas en juego</span><span id="sum-kick-event" class="value">0</span></div>
+      </div>
+
+      <h3 class="summary-subhead">Densidad de eventos</h3>
+      <div class="summary-grid">
+        <div><span class="label">Rucks/min</span><span id="sum-ruck-per-min" class="value">—</span></div>
+        <div><span class="label">Rucks/min BIP</span><span id="sum-ruck-per-bip-min" class="value">—</span></div>
+        <div><span class="label">Patadas/min</span><span id="sum-kick-per-min" class="value">—</span></div>
+        <div><span class="label">Patadas/min BIP</span><span id="sum-kick-per-bip-min" class="value">—</span></div>
       </div>
 
       <h3 class="summary-subhead">Racha más larga (WCS)</h3>

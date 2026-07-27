@@ -1,4 +1,4 @@
-const CACHE_NAME = "cronosesion-v8";
+const CACHE_NAME = "cronosesion-v9";
 const APP_SHELL = [
   "./",
   "./index.html",
