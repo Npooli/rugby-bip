@@ -359,18 +359,44 @@ function csvEscape(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+function csvFileName() {
+  const stamp = (state.startedAt || nowIso()).replace(/[:.]/g, "-");
+  return `cronosesion_${stamp}.csv`;
+}
+
 function exportCsv() {
   const csv = buildCsv();
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const stamp = (state.startedAt || nowIso()).replace(/[:.]/g, "-");
   a.href = url;
-  a.download = `cronosesion_${stamp}.csv`;
+  a.download = csvFileName();
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/* Shares the CSV through the device's native share sheet (WhatsApp, Mail,
+   AirDrop, etc.) instead of a hosted link — keeps everything local, no
+   server involved. Falls back to a plain download if the browser/device
+   doesn't support sharing files (e.g. desktop Safari, older browsers). */
+async function shareCsv() {
+  const csv = buildCsv();
+  const file = new File([csv], csvFileName(), { type: "text/csv" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: "Cronosesión",
+        text: `Resumen de sesión — ${fmtClockTime(state.startedAt)} a ${fmtClockTime(state.endedAt)}`
+      });
+    } catch (err) {
+      if (err.name !== "AbortError") exportCsv();
+    }
+  } else {
+    exportCsv();
+  }
 }
 
 /* ---------- Import from Angles XML ----------
@@ -476,6 +502,7 @@ const el = {
   phaseStatusBip: document.querySelector(".phase-status-item.bip"),
   phaseStatusBop: document.querySelector(".phase-status-item.bop"),
   liveBall: document.getElementById("live-ball"),
+  liveBallWrap: document.getElementById("live-ball-wrap"),
   bipSourceHint: document.getElementById("bip-source-hint"),
   bipSourcePicker: document.getElementById("bip-source-picker"),
   sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
@@ -491,6 +518,7 @@ const el = {
   ruckCount: document.getElementById("ruck-count"),
   btnLogKick: document.getElementById("btn-log-kick"),
   kickCount: document.getElementById("kick-count"),
+  liveFeedList: document.getElementById("live-feed-list"),
   btnFinishActivity: document.getElementById("btn-finish-activity"),
   activitiesListWrap: document.getElementById("activities-list-wrap"),
   activitiesList: document.getElementById("activities-list"),
@@ -503,7 +531,9 @@ const el = {
   sumKickEvent: document.getElementById("sum-kick-event"),
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
-  btnExportCsv: document.getElementById("btn-export-csv")
+  btnExportCsv: document.getElementById("btn-export-csv"),
+  btnExportPdf: document.getElementById("btn-export-pdf"),
+  btnShare: document.getElementById("btn-share")
 };
 
 function render() {
@@ -529,6 +559,8 @@ function render() {
     el.phaseStatusBop.classList.toggle("active", active.phase === "BOP");
     el.liveBall.classList.toggle("phase-bip", active.phase === "BIP");
     el.liveBall.classList.toggle("phase-bop", active.phase === "BOP");
+    el.liveBallWrap.classList.toggle("pulse-bip", active.phase === "BIP");
+    el.liveBallWrap.classList.toggle("pulse-bop", active.phase === "BOP");
 
     const inPlay = active.phase === "BIP";
     el.bipSourceHint.hidden = inPlay;
@@ -542,6 +574,7 @@ function render() {
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
     el.kickCount.textContent = active.events.filter((e) => e.type === "KICK").length;
+    renderLiveFeed(active);
   }
 
   renderFinishedActivities();
@@ -572,6 +605,37 @@ function render() {
 
   tick(); // paint live numbers immediately
   saveState();
+}
+
+const FEED_MAX_ITEMS = 8;
+
+/* A chronological feed of what just happened in the current activity —
+   restart taps, BOP switches, ruck/kick counts — newest first. Built fresh
+   from segments/events each render rather than stored separately, so it
+   can never drift out of sync with the data that drives the stats. */
+function renderLiveFeed(activity) {
+  const items = [];
+  activity.segments.forEach((seg) => {
+    if (seg.phase === "BIP") {
+      items.push({ at: seg.startedAt, kind: "feed-bip", text: `BIP iniciado — ${SOURCE_LABELS[seg.source] || "origen desconocido"}` });
+    } else {
+      items.push({ at: seg.startedAt, kind: "feed-bop", text: "BOP — fuera de juego" });
+    }
+  });
+  activity.events.forEach((ev) => {
+    items.push({ at: ev.at, kind: "feed-event", text: ev.type === "RUCK" ? "+1 Ruck" : "+1 Patada en juego" });
+  });
+
+  items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const latest = items.slice(0, FEED_MAX_ITEMS);
+
+  el.liveFeedList.innerHTML = latest.length
+    ? latest.map((item) => `
+        <li class="${item.kind}">
+          <time>${fmtClockTime(item.at)}</time>
+          <span>${escapeHtml(item.text)}</span>
+        </li>`).join("")
+    : `<li class="live-feed-empty" style="border:none;background:none;">Sin eventos todavía</li>`;
 }
 
 function renderFinishedActivities() {
@@ -846,6 +910,8 @@ el.btnFinishActivity.addEventListener("click", () => {
   if (active) finishActivity(active.id);
 });
 el.btnExportCsv.addEventListener("click", exportCsv);
+el.btnExportPdf.addEventListener("click", () => window.print());
+el.btnShare.addEventListener("click", shareCsv);
 el.btnNewSession.addEventListener("click", newSession);
 
 window.addEventListener("beforeunload", saveState);

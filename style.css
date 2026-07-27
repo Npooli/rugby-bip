@@ -1,25 +1,31 @@
 :root {
-  /* Navy + gold brand chrome */
-  --bg: #0a1120;
-  --panel: #101b30;
-  --panel-border: #223252;
-  --text: #f4f1e6;
-  --muted: #8b96ad;
-  --accent: #c9a227;
-  --accent-bright: #e8c76b;
-  --accent-ink: #0a1120;
+  /* "Apex Athletic Performance" navy + gold system, adapted from the
+     Stitch-generated design tokens the coach supplied. */
+  --bg: #0c1322;
+  --panel: #191f2f;
+  --panel-high: #232a3a;
+  --panel-border: rgba(144, 144, 151, 0.2);
+  --panel-border-strong: rgba(144, 144, 151, 0.4);
+  --text: #dce2f8;
+  --muted: #909097;
+  --accent: #ffc640;
+  --accent-bright: #ffd670;
+  --accent-ink: #402d00;
+  --data-gold: #c29b40;
   --danger: #ef4444;
-  /* Validated status pair (dataviz skill): good/warning, mode-invariant hex,
-     kept distinct from brand chrome. Always paired with a text label —
-     never used as the sole carrier of meaning. */
-  --bip: #0ca30c;
+  /* Good/warning status pair — kept distinct from brand chrome. Always
+     paired with a text label, never used as the sole carrier of meaning. */
+  --bip: #22c55e;
   --bop: #fab219;
   --gap: #7c88a0;
-  /* Categorical slot 1 (blue) from the reference palette — used only for
-     "activity happened but BIP wasn't tagged", kept distinct from the
-     bip/bop/gap trio so it never reads as one of those. */
+  /* Categorical slot — used only for "activity happened but BIP wasn't
+     tagged", kept distinct from the bip/bop/gap trio so it never reads as
+     one of those. */
   --untracked: #2a78d6;
   --radius: 16px;
+  --font-display: "Hanken Grotesk", -apple-system, sans-serif;
+  --font-body: "Inter", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -29,8 +35,21 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3, .value.big, .stat-number {
+  font-family: var(--font-display);
+}
+
+.label, .phase-label, .tick, .legend-item, .bip-tag, .bop-tag {
+  font-family: var(--font-mono);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  vertical-align: middle;
 }
 
 .topbar {
@@ -69,7 +88,24 @@ html, body {
 .live-ball-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: 16px;
+  align-items: center;
+  width: 176px;
+  height: 176px;
+  margin: 4px auto 20px;
+  border-radius: 999px;
+  border: 6px solid var(--panel-high);
+  background: var(--panel-high);
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.live-ball-wrap.pulse-bip {
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.25);
+}
+
+.live-ball-wrap.pulse-bop {
+  border-color: rgba(250, 178, 25, 0.3);
+  box-shadow: 0 0 30px rgba(250, 178, 25, 0.15);
 }
 
 .live-ball {
@@ -79,7 +115,7 @@ html, body {
 }
 
 .live-ball.phase-bop {
-  opacity: 0.4;
+  opacity: 0.45;
 }
 
 .live-ball.phase-bip {
@@ -122,7 +158,9 @@ main {
 }
 
 .card {
-  background: var(--panel);
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 20px;
@@ -132,15 +170,18 @@ main {
 
 .card h2 {
   margin: 0 0 14px;
-  font-size: 15px;
+  font-family: var(--font-mono);
+  font-size: 13px;
   font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
 .session-card {
-  background: var(--panel);
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 20px 18px;
@@ -197,13 +238,20 @@ main {
 
 .big-btn.start { background: var(--accent); color: var(--accent-ink); }
 .big-btn.stop { background: var(--danger); }
-.big-btn.export {
+.big-btn.export { background: var(--accent); color: var(--accent-ink); }
+.big-btn.export-outline {
   background: transparent;
   color: var(--accent-bright);
   border: 1.5px solid var(--accent);
 }
 
 .big-btn:active { opacity: 0.85; transform: scale(0.98); }
+
+.export-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 #new-activity-form input {
   width: 100%;
@@ -258,7 +306,7 @@ main {
 .phase-status-item.bip.active {
   opacity: 1;
   border-color: var(--bip);
-  background: rgba(12, 163, 12, 0.15);
+  background: rgba(34, 197, 94, 0.15);
   color: var(--bip);
 }
 
@@ -287,11 +335,11 @@ main {
 }
 
 .source-btn {
-  padding: 16px 8px;
+  padding: 18px 8px;
   border-radius: 12px;
   border: 1.5px solid var(--panel-border);
-  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
-  background: transparent;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+  background: var(--panel-high);
   color: var(--text);
   font-size: 15px;
   font-weight: 700;
@@ -299,8 +347,76 @@ main {
 }
 
 .source-btn:active {
+  transform: scale(0.96);
+}
+
+.source-btn:active {
   border-color: var(--bip);
-  background: rgba(12, 163, 12, 0.15);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.live-feed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.live-feed-header h3 {
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.live-feed-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bip);
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-feed-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.live-feed-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 3px solid var(--panel-border);
+  background: var(--panel-high);
+  font-size: 13px;
+}
+
+.live-feed-list li.feed-bip { border-left-color: var(--bip); }
+.live-feed-list li.feed-bop { border-left-color: var(--bop); }
+.live-feed-list li.feed-event { border-left-color: var(--accent); }
+
+.live-feed-list time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.live-feed-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 2px;
 }
 
 .bip-active-info {
@@ -451,10 +567,11 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 10px 4px;
+  gap: 4px;
+  padding: 12px 4px;
+  background: var(--panel-high);
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .summary-grid .label {
@@ -463,8 +580,9 @@ main {
 }
 
 .summary-grid .value {
-  font-size: 18px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
 }
 
 .wcs-stat {
@@ -707,4 +825,46 @@ main {
   font-size: 12px;
   color: var(--muted);
   padding: 24px 16px 40px;
+}
+
+/* Print / "Descargar PDF" — the button triggers window.print(); this is
+   the only styling that runs, no PDF library needed. Everything except the
+   session summary + timeline is hidden, and colors flip to a light,
+   ink-friendly sheet. */
+@media print {
+  .topbar, #view-idle, .session-card .big-btn, #new-activity-form,
+  #active-activity, .link-btn, .app-footer, .export-row,
+  .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row {
+    display: none !important;
+  }
+
+  html, body {
+    background: #fff;
+    color: #111;
+  }
+
+  main { max-width: 100%; padding: 0; }
+
+  .card, .session-card {
+    background: #fff;
+    color: #111;
+    border: 1px solid #ccc;
+    box-shadow: none;
+    backdrop-filter: none;
+    break-inside: avoid;
+  }
+
+  .card h2, .summary-subhead, .label, .value {
+    color: #111 !important;
+  }
+
+  .summary-grid > div, #activities-list li, .timeline-track {
+    background: #f2f2f2;
+    border-color: #ccc;
+  }
+
+  .timeline-seg.bip { background: #0ca30c; }
+  .timeline-seg.bop { background: #c98500; }
+  .timeline-seg.gap { background: #999; }
+  .timeline-seg.untracked { background: #2a78d6; }
 }
