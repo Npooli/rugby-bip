@@ -27,7 +27,11 @@
     </svg>
     <h1>Rugby BIP</h1>
   </div>
-  <button id="btn-new-session" class="link-btn" hidden>Nueva sesión</button>
+  <nav id="screen-nav" class="screen-nav">
+    <button class="nav-tab" type="button" data-screen="inicio">Inicio</button>
+    <button class="nav-tab" type="button" data-screen="vivo">Vivo</button>
+    <button class="nav-tab" type="button" data-screen="edicion">Edición</button>
+  </nav>
 </header>
 
 <main id="app">
@@ -41,9 +45,22 @@
     <button id="btn-recovery-discard" class="link-btn">Descartar y empezar de cero</button>
   </section>
 
-  <!-- Estado: sin sesión iniciada -->
-  <section id="view-idle" class="view">
-    <button id="btn-start-session" class="big-btn start">Iniciar sesión</button>
+  <!-- ============ PANTALLA 1: INICIO ============ -->
+  <section id="screen-inicio" class="view">
+
+    <div id="inicio-start-form">
+      <div class="session-name-row">
+        <label class="label" for="input-session-name">Nombre de la sesión</label>
+        <input type="text" id="input-session-name" placeholder='Ej. "U20 vs Japón" o "Entreno MD-3"' maxlength="60">
+      </div>
+      <button id="btn-start-session" class="big-btn start">Iniciar sesión en vivo</button>
+    </div>
+
+    <div id="inicio-existing-notice" class="card" hidden>
+      <p id="inicio-existing-text" class="recovery-text"></p>
+      <button id="btn-inicio-goto-session" class="big-btn start">Ir a la sesión</button>
+      <button id="btn-inicio-discard" class="link-btn">Descartar y empezar de cero</button>
+    </div>
 
     <div class="import-section">
       <button id="btn-show-import" class="link-btn">Importar XML</button>
@@ -59,191 +76,210 @@
       </div>
     </div>
 
+    <button id="btn-goto-edicion" class="link-btn">Abrir una sesión anterior para editar</button>
+
     <p class="idle-tagline">Tiempo real de juego (BIP/BOP), rucks y patadas — 100% local, sin cuentas ni nube.</p>
   </section>
 
-  <!-- Estado: sesión en curso o finalizada -->
-  <section id="view-session" class="view" hidden>
+  <!-- ============ PANTALLA 2: VIVO ============ -->
+  <section id="screen-vivo" class="view" hidden>
 
-    <div class="session-card">
-      <div class="session-times">
-        <div><span class="label">Inicio</span><span id="session-start-time" class="value">--:--:--</span></div>
-        <div><span class="label">Duración</span><span id="session-elapsed" class="value big">00:00:00</span></div>
-        <div><span class="label">Fin</span><span id="session-end-time" class="value">--:--:--</span></div>
-      </div>
-      <button id="btn-finish-session" class="big-btn stop">Finalizar sesión</button>
-    </div>
+    <p id="vivo-empty-state" class="empty-state" hidden>No hay una sesión en vivo. Volvé a Inicio para arrancar una.</p>
 
-    <!-- Formulario nueva actividad -->
-    <div id="new-activity-form" class="card">
-      <h2>Nueva actividad</h2>
-      <input id="input-activity-name" type="text" placeholder="Nombre de la actividad (ej. Entrada en calor)" maxlength="60">
-      <button id="btn-start-activity" class="big-btn start">Iniciar actividad</button>
-    </div>
-
-    <!-- Actividad en curso -->
-    <div id="active-activity" class="card active-activity" hidden>
-      <h2 id="active-activity-name">—</h2>
-      <div class="activity-times">
-        <div><span class="label">Inicio</span><span id="active-activity-start" class="value">--:--:--</span></div>
-        <div><span class="label">Duración</span><span id="active-activity-elapsed" class="value big">00:00:00</span></div>
-      </div>
-
-      <div class="live-stats-grid">
-        <div class="live-stat-tile">
-          <span class="label">Juego real</span>
-          <div id="bip-percent" class="live-stat-number">0%</div>
-          <div class="bip-bar"><div id="bip-bar-fill" class="bip-bar-fill"></div></div>
+    <div id="vivo-content">
+      <div class="session-card">
+        <h2 id="session-name-display" class="session-name-display" hidden></h2>
+        <div class="session-times">
+          <div><span class="label">Inicio</span><span id="session-start-time" class="value">--:--:--</span></div>
+          <div><span class="label">Duración</span><span id="session-elapsed" class="value big">00:00:00</span></div>
+          <div><span class="label">Fin</span><span id="session-end-time" class="value">--:--:--</span></div>
         </div>
-        <div class="live-stat-tile">
-          <span class="label">Ratio trabajo:descanso</span>
-          <div id="bip-ratio" class="live-stat-number">—</div>
-        </div>
+        <button id="btn-finish-session" class="big-btn stop">Finalizar sesión</button>
       </div>
 
-      <div id="live-ball-wrap" class="live-ball-wrap">
-        <div id="live-ball-ring" class="live-ball-ring"></div>
-        <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="38" height="38" aria-hidden="true">
-          <ellipse cx="50" cy="30" rx="44" ry="25"/>
-          <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
-          <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
-          <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
-          <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
-        </svg>
-        <div id="live-ball-label" class="live-ball-label">
-          <span id="live-ball-phase">—</span>
-          <span id="live-ball-sub" class="live-ball-sub">Iniciá una fase</span>
-        </div>
+      <!-- Formulario nueva actividad -->
+      <div id="new-activity-form" class="card">
+        <h2>Nueva actividad</h2>
+        <input id="input-activity-name" type="text" placeholder="Nombre de la actividad (ej. Entrada en calor)" maxlength="60">
+        <button id="btn-start-activity" class="big-btn start">Iniciar actividad</button>
       </div>
 
-      <div id="phase-status-row" class="phase-status">
-        <div class="phase-status-item bop">
-          <span class="phase-label">BOP</span>
-          <span id="bop-time" class="phase-time">00:00</span>
-        </div>
-        <div class="phase-status-item bip">
-          <span class="phase-label">BIP</span>
-          <span id="bip-time" class="phase-time">00:00</span>
-        </div>
-      </div>
-
-      <!-- Secundario: historial de lo que pasó. Scrollea dentro de su propio
-           espacio en vez de empujar los controles táctiles fuera de pantalla. -->
-      <div class="live-feed-header">
-        <h3 class="label">Live Feed</h3>
-        <span class="live-feed-dot"></span>
-        <button id="btn-undo-last" class="link-btn feed-undo-btn" type="button">Deshacer último</button>
-      </div>
-      <ul id="live-feed-list" class="live-feed-list"></ul>
-
-      <!-- Zona del pulgar: todo lo que se toca en vivo, siempre a mano abajo. -->
-      <div id="live-controls-zone" class="live-controls-zone">
-        <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
-        <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
-        <div id="bip-source-picker" class="source-grid">
-          <button class="source-btn" data-source="scrum">Scrum</button>
-          <button class="source-btn" data-source="lineout">Line Out</button>
-          <button class="source-btn" data-source="open">Juego libre</button>
-          <button class="source-btn" data-source="kick">Patada</button>
+      <!-- Actividad en curso -->
+      <div id="active-activity" class="card active-activity" hidden>
+        <h2 id="active-activity-name">—</h2>
+        <div class="activity-times">
+          <div><span class="label">Inicio</span><span id="active-activity-start" class="value">--:--:--</span></div>
+          <div><span class="label">Duración</span><span id="active-activity-elapsed" class="value big">00:00:00</span></div>
         </div>
 
-        <!-- Visible cuando está en BIP: origen actual + botón para volver a BOP -->
-        <div id="bip-active-info" class="bip-active-info" hidden>
-          <span class="label">En juego desde</span>
-          <span id="bip-source-label" class="value">—</span>
+        <div class="live-stats-grid">
+          <div class="live-stat-tile">
+            <span class="label">Juego real</span>
+            <div id="bip-percent" class="live-stat-number">0%</div>
+            <div class="bip-bar"><div id="bip-bar-fill" class="bip-bar-fill"></div></div>
+          </div>
+          <div class="live-stat-tile">
+            <span class="label">Ratio trabajo:descanso</span>
+            <div id="bip-ratio" class="live-stat-number">—</div>
+          </div>
         </div>
-        <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
 
-        <div class="tag-row">
-          <button id="btn-log-ruck" class="tag-btn tag-btn-primary">
-            <span class="material-symbols-outlined" aria-hidden="true">sports_rugby</span>
-            <span class="tag-btn-label">RUCK</span>
-            <span id="ruck-count" class="tag-count">0</span>
-          </button>
-          <button id="btn-log-kick" class="tag-btn tag-btn-secondary">
-            <svg class="rugby-ball tag-btn-ball" viewBox="0 0 100 60" width="32" height="32" aria-hidden="true">
-              <ellipse cx="50" cy="30" rx="44" ry="25"/>
-              <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
-              <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
-              <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
-              <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
-            </svg>
-            <span class="tag-btn-label">KICK</span>
-            <span id="kick-count" class="tag-count">0</span>
-          </button>
+        <div id="live-ball-wrap" class="live-ball-wrap">
+          <div id="live-ball-ring" class="live-ball-ring"></div>
+          <svg id="live-ball" class="rugby-ball live-ball" viewBox="0 0 100 60" width="38" height="38" aria-hidden="true">
+            <ellipse cx="50" cy="30" rx="44" ry="25"/>
+            <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
+            <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
+            <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
+            <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
+          </svg>
+          <div id="live-ball-label" class="live-ball-label">
+            <span id="live-ball-phase">—</span>
+            <span id="live-ball-sub" class="live-ball-sub">Iniciá una fase</span>
+          </div>
         </div>
+
+        <div id="phase-status-row" class="phase-status">
+          <div class="phase-status-item bop">
+            <span class="phase-label">BOP</span>
+            <span id="bop-time" class="phase-time">00:00</span>
+          </div>
+          <div class="phase-status-item bip">
+            <span class="phase-label">BIP</span>
+            <span id="bip-time" class="phase-time">00:00</span>
+          </div>
+        </div>
+
+        <!-- Secundario: historial de lo que pasó. Scrollea dentro de su propio
+             espacio en vez de empujar los controles táctiles fuera de pantalla. -->
+        <div class="live-feed-header">
+          <h3 class="label">Live Feed</h3>
+          <span class="live-feed-dot"></span>
+          <button id="btn-undo-last" class="link-btn feed-undo-btn" type="button">Deshacer último</button>
+        </div>
+        <ul id="live-feed-list" class="live-feed-list"></ul>
+
+        <!-- Zona del pulgar: todo lo que se toca en vivo, siempre a mano abajo. -->
+        <div id="live-controls-zone" class="live-controls-zone">
+          <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
+          <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
+          <div id="bip-source-picker" class="source-grid">
+            <button class="source-btn" data-source="scrum">Scrum</button>
+            <button class="source-btn" data-source="lineout">Line Out</button>
+            <button class="source-btn" data-source="open">Juego libre</button>
+            <button class="source-btn" data-source="kick">Patada</button>
+          </div>
+
+          <!-- Visible cuando está en BIP: origen actual + botón para volver a BOP -->
+          <div id="bip-active-info" class="bip-active-info" hidden>
+            <span class="label">En juego desde</span>
+            <span id="bip-source-label" class="value">—</span>
+          </div>
+          <button id="btn-end-bip" class="big-btn bop-btn" hidden>Fuera de juego (BOP)</button>
+
+          <div class="tag-row">
+            <button id="btn-log-ruck" class="tag-btn tag-btn-primary">
+              <span class="material-symbols-outlined" aria-hidden="true">sports_rugby</span>
+              <span class="tag-btn-label">RUCK</span>
+              <span id="ruck-count" class="tag-count">0</span>
+            </button>
+            <button id="btn-log-kick" class="tag-btn tag-btn-secondary">
+              <svg class="rugby-ball tag-btn-ball" viewBox="0 0 100 60" width="32" height="32" aria-hidden="true">
+                <ellipse cx="50" cy="30" rx="44" ry="25"/>
+                <line class="seam" x1="14" y1="30" x2="86" y2="30"/>
+                <line class="seam" x1="32" y1="21" x2="32" y2="39"/>
+                <line class="seam" x1="50" y1="18" x2="50" y2="42"/>
+                <line class="seam" x1="68" y1="21" x2="68" y2="39"/>
+              </svg>
+              <span class="tag-btn-label">KICK</span>
+              <span id="kick-count" class="tag-count">0</span>
+            </button>
+          </div>
+        </div>
+
+        <button id="btn-finish-activity" class="big-btn stop">Finalizar actividad</button>
       </div>
 
-      <button id="btn-finish-activity" class="big-btn stop">Finalizar actividad</button>
-    </div>
-
-    <!-- Actividades completadas -->
-    <div id="activities-list-wrap" class="card" hidden>
-      <h2>Actividades completadas</h2>
-      <ul id="activities-list"></ul>
-    </div>
-
-    <!-- Timeline visual de la sesión -->
-    <div id="timeline-wrap" class="card" hidden>
-      <h2>Línea de tiempo</h2>
-      <div class="timeline-legend">
-        <span class="legend-item"><span class="legend-swatch bip"></span>BIP · balón en juego</span>
-        <span class="legend-item"><span class="legend-swatch bop"></span>BOP · fuera de juego</span>
-        <span class="legend-item"><span class="legend-swatch gap"></span>Sin actividad</span>
-        <span class="legend-item"><span class="legend-swatch untracked"></span>Sin medir BIP</span>
-        <span class="legend-item"><span class="legend-dot"></span>Ruck / Patada</span>
-      </div>
-      <div id="timeline-axis" class="timeline-axis"></div>
-      <div id="timeline-rows" class="timeline-rows"></div>
-      <p id="timeline-tooltip" class="timeline-tooltip" hidden></p>
-    </div>
-
-    <!-- Resumen final tras finalizar sesión -->
-    <div id="session-summary" class="card" hidden>
-      <h2>Resumen de la sesión</h2>
-
-      <h3 class="summary-subhead">Juego real (sesión)</h3>
-      <div class="summary-grid">
-        <div><span class="label">% Juego real</span><span id="sum-bip-percent" class="value">—</span></div>
-        <div><span class="label">Ratio trabajo:descanso</span><span id="sum-bip-ratio" class="value">—</span></div>
-      </div>
-      <p id="bip-percent-note" class="metric-note"></p>
-
-      <h3 class="summary-subhead">Reinicios de juego</h3>
-      <div class="summary-grid">
-        <div><span class="label">Scrum</span><span id="sum-scrum" class="value">0</span></div>
-        <div><span class="label">Line Out</span><span id="sum-lineout" class="value">0</span></div>
-        <div><span class="label">Libre</span><span id="sum-open" class="value">0</span></div>
-        <div><span class="label">Patada</span><span id="sum-kick-restart" class="value">0</span></div>
-      </div>
-
-      <h3 class="summary-subhead">Eventos</h3>
-      <div class="summary-grid">
-        <div><span class="label">Rucks</span><span id="sum-ruck" class="value">0</span></div>
-        <div><span class="label">Patadas en juego</span><span id="sum-kick-event" class="value">0</span></div>
-      </div>
-
-      <h3 class="summary-subhead">Densidad de eventos</h3>
-      <div class="summary-grid">
-        <div><span class="label">Rucks/min</span><span id="sum-ruck-per-min" class="value">—</span></div>
-        <div><span class="label">Rucks/min BIP</span><span id="sum-ruck-per-bip-min" class="value">—</span></div>
-        <div><span class="label">Patadas/min</span><span id="sum-kick-per-min" class="value">—</span></div>
-        <div><span class="label">Patadas/min BIP</span><span id="sum-kick-per-bip-min" class="value">—</span></div>
-      </div>
-
-      <h3 class="summary-subhead">Racha más larga (WCS)</h3>
-      <div id="wcs-stat" class="wcs-stat">Sin datos</div>
-
-      <h3 class="summary-subhead">Distribución de rachas BIP</h3>
-      <div id="bip-distribution" class="bip-distribution"></div>
-
-      <div class="export-row">
-        <button id="btn-export-csv" class="big-btn export">Descargar CSV</button>
-        <button id="btn-export-pdf" class="big-btn export-outline">Descargar PDF</button>
-        <button id="btn-share" class="big-btn export-outline">Compartir</button>
+      <!-- Actividades completadas -->
+      <div id="activities-list-wrap" class="card" hidden>
+        <h2>Actividades completadas</h2>
+        <ul id="activities-list"></ul>
       </div>
     </div>
+  </section>
 
+  <!-- ============ PANTALLA 3: EDICIÓN + EXPORTACIÓN ============ -->
+  <section id="screen-edicion" class="view" hidden>
+
+    <p id="edicion-empty-state" class="empty-state" hidden>Todavía no hay ninguna sesión para editar. Grabá una nueva desde Inicio o importá un XML.</p>
+
+    <div id="edicion-content">
+      <!-- Timeline visual de la sesión -->
+      <div id="timeline-wrap" class="card" hidden>
+        <h2>Línea de tiempo</h2>
+        <div class="timeline-legend">
+          <span class="legend-item"><span class="legend-swatch bip"></span>BIP · balón en juego</span>
+          <span class="legend-item"><span class="legend-swatch bop"></span>BOP · fuera de juego</span>
+          <span class="legend-item"><span class="legend-swatch gap"></span>Sin actividad</span>
+          <span class="legend-item"><span class="legend-swatch untracked"></span>Sin medir BIP</span>
+          <span class="legend-item"><span class="legend-dot"></span>Ruck / Patada</span>
+        </div>
+        <div id="timeline-axis" class="timeline-axis"></div>
+        <div id="timeline-rows" class="timeline-rows"></div>
+        <p id="timeline-tooltip" class="timeline-tooltip" hidden></p>
+      </div>
+
+      <!-- Resumen final tras finalizar sesión -->
+      <div id="session-summary" class="card" hidden>
+        <h2 id="summary-heading">Resumen de la sesión</h2>
+        <div class="session-times">
+          <div><span class="label">Inicio</span><span id="summary-start-time" class="value">--:--:--</span></div>
+          <div><span class="label">Duración</span><span id="summary-elapsed" class="value big">00:00:00</span></div>
+          <div><span class="label">Fin</span><span id="summary-end-time" class="value">--:--:--</span></div>
+        </div>
+
+        <h3 class="summary-subhead">Juego real (sesión)</h3>
+        <div class="summary-grid">
+          <div><span class="label">% Juego real</span><span id="sum-bip-percent" class="value">—</span></div>
+          <div><span class="label">Ratio trabajo:descanso</span><span id="sum-bip-ratio" class="value">—</span></div>
+        </div>
+        <p id="bip-percent-note" class="metric-note"></p>
+
+        <h3 class="summary-subhead">Reinicios de juego</h3>
+        <div class="summary-grid">
+          <div><span class="label">Scrum</span><span id="sum-scrum" class="value">0</span></div>
+          <div><span class="label">Line Out</span><span id="sum-lineout" class="value">0</span></div>
+          <div><span class="label">Libre</span><span id="sum-open" class="value">0</span></div>
+          <div><span class="label">Patada</span><span id="sum-kick-restart" class="value">0</span></div>
+        </div>
+
+        <h3 class="summary-subhead">Eventos</h3>
+        <div class="summary-grid">
+          <div><span class="label">Rucks</span><span id="sum-ruck" class="value">0</span></div>
+          <div><span class="label">Patadas en juego</span><span id="sum-kick-event" class="value">0</span></div>
+        </div>
+
+        <h3 class="summary-subhead">Densidad de eventos</h3>
+        <div class="summary-grid">
+          <div><span class="label">Rucks/min</span><span id="sum-ruck-per-min" class="value">—</span></div>
+          <div><span class="label">Rucks/min BIP</span><span id="sum-ruck-per-bip-min" class="value">—</span></div>
+          <div><span class="label">Patadas/min</span><span id="sum-kick-per-min" class="value">—</span></div>
+          <div><span class="label">Patadas/min BIP</span><span id="sum-kick-per-bip-min" class="value">—</span></div>
+        </div>
+
+        <h3 class="summary-subhead">Racha más larga (WCS)</h3>
+        <div id="wcs-stat" class="wcs-stat">Sin datos</div>
+
+        <h3 class="summary-subhead">Distribución de rachas BIP</h3>
+        <div id="bip-distribution" class="bip-distribution"></div>
+
+        <div class="export-row">
+          <button id="btn-export-csv" class="big-btn export">Descargar CSV</button>
+          <button id="btn-export-pdf" class="big-btn export-outline">Descargar PDF</button>
+          <button id="btn-share" class="big-btn export-outline">Compartir</button>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>

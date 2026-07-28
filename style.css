@@ -226,7 +226,7 @@ main {
 .view { display: block; }
 .view[hidden] { display: none; }
 
-#view-idle {
+#screen-inicio {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -235,6 +235,70 @@ main {
      footer, instead of a flat 60vh guess — on most phones that flat value
      left a large dead strip below "Importar XML" before the footer. */
   min-height: calc(100dvh - 190px);
+}
+
+.screen-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-tab {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.nav-tab.active {
+  color: var(--action-ink);
+  background: var(--action);
+}
+
+.session-name-row {
+  margin-bottom: 14px;
+}
+
+.session-name-row .label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+#input-session-name {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.session-name-display {
+  text-transform: none;
+  color: var(--text);
+  font-size: 17px;
+  letter-spacing: 0;
+  margin: 0 0 12px;
+}
+
+#summary-heading {
+  text-transform: none;
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 32px 12px;
 }
 
 .idle-tagline {
@@ -1012,7 +1076,7 @@ main {
    session summary + timeline is hidden, and colors flip to a light,
    ink-friendly sheet. */
 @media print {
-  .topbar, #view-idle, .session-card .big-btn, #new-activity-form,
+  .topbar, #screen-inicio, .session-card .big-btn, #new-activity-form,
   #active-activity, .link-btn, .app-footer, .export-row,
   .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row {
     display: none !important;

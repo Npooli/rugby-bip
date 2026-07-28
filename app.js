@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "cronosesion.session.v1";
-const SCHEMA_VERSION = 6; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
+const SCHEMA_VERSION = 7; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
 
 const SOURCE_LABELS = {
   scrum: "Scrum",
@@ -118,6 +118,7 @@ function freshSession() {
   return {
     schemaVersion: SCHEMA_VERSION,
     id: uid(),
+    name: "",
     startedAt: null,
     endedAt: null,
     status: "idle", // idle | running | finished
@@ -149,6 +150,40 @@ function saveState() {
 
 function currentActivity() {
   return state.activities.find((a) => a.id === state.runningActivityId) || null;
+}
+
+/* ---------- Screen router ----------
+   Three screens (Inicio/Vivo/Edición) live in the same page; the URL hash
+   (#inicio/#vivo/#edicion) is the single source of truth for which one is
+   visible. It's kept independent from state.status on purpose — you can
+   jump to Edición to open an old session without touching a live one — but
+   with no hash yet (first load) we default based on state.status, so a
+   reload mid-session or right after finishing lands you where you'd expect. */
+
+const SCREENS = ["inicio", "vivo", "edicion"];
+
+function screenFromState() {
+  if (state.status === "running") return "vivo";
+  if (state.status === "finished") return "edicion";
+  return "inicio";
+}
+
+function currentScreen() {
+  const hash = location.hash.slice(1);
+  return SCREENS.includes(hash) ? hash : screenFromState();
+}
+
+function showScreen(screen) {
+  el.screenInicio.hidden = screen !== "inicio";
+  el.screenVivo.hidden = screen !== "vivo";
+  el.screenEdicion.hidden = screen !== "edicion";
+  el.navTabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.screen === screen));
+}
+
+function navigateTo(screen) {
+  if (!SCREENS.includes(screen)) return;
+  if (currentScreen() === screen) { showScreen(screen); return; }
+  location.hash = screen;
 }
 
 /* ---------- Actions ---------- */
@@ -419,7 +454,7 @@ function bipStreakStats() {
 
 function buildCsv() {
   const headers = [
-    "session_id", "session_start_time", "session_end_time", "session_duration_s",
+    "session_id", "session_name", "session_start_time", "session_end_time", "session_duration_s",
     "activity_name", "activity_start_time", "activity_end_time", "activity_duration_s",
     "bip_duration_s", "bop_duration_s", "bip_percent", "work_rest_ratio",
     "ruck_count", "kick_event_count"
@@ -429,6 +464,7 @@ function buildCsv() {
     const stats = activityStats(activity);
     return [
       state.id,
+      csvEscape(state.name || ""),
       state.startedAt || "",
       state.endedAt || "",
       sessionDurationS,
@@ -452,9 +488,18 @@ function csvEscape(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+function slugify(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function csvFileName() {
   const stamp = (state.startedAt || nowIso()).replace(/[:.]/g, "-");
-  return `cronosesion_${stamp}.csv`;
+  const slug = slugify(state.name);
+  return `${slug || "cronosesion"}_${stamp}.csv`;
 }
 
 function exportCsv() {
@@ -481,8 +526,8 @@ async function shareCsv() {
     try {
       await navigator.share({
         files: [file],
-        title: "Cronosesión",
-        text: `Resumen de sesión — ${fmtClockTime(state.startedAt)} a ${fmtClockTime(state.endedAt)}`
+        title: state.name || "Rugby BIP",
+        text: `${state.name ? state.name + " — " : ""}Resumen de sesión — ${fmtClockTime(state.startedAt)} a ${fmtClockTime(state.endedAt)}`
       });
     } catch (err) {
       if (err.name !== "AbortError") exportCsv();
@@ -559,6 +604,7 @@ function buildSessionFromAngles(segments, anchorMs) {
   return {
     schemaVersion: SCHEMA_VERSION,
     id: uid(),
+    name: "Importado desde XML",
     startedAt,
     endedAt,
     status: "finished",
@@ -571,13 +617,20 @@ function buildSessionFromAngles(segments, anchorMs) {
 /* ---------- Rendering ---------- */
 
 const el = {
+  navTabs: Array.from(document.querySelectorAll(".nav-tab")),
   recoveryBanner: document.getElementById("recovery-banner"),
   recoveryText: document.getElementById("recovery-text"),
   btnRecoveryContinue: document.getElementById("btn-recovery-continue"),
   btnRecoveryDiscard: document.getElementById("btn-recovery-discard"),
-  btnNewSession: document.getElementById("btn-new-session"),
-  viewIdle: document.getElementById("view-idle"),
+
+  screenInicio: document.getElementById("screen-inicio"),
+  inicioStartForm: document.getElementById("inicio-start-form"),
+  inputSessionName: document.getElementById("input-session-name"),
   btnStartSession: document.getElementById("btn-start-session"),
+  inicioExistingNotice: document.getElementById("inicio-existing-notice"),
+  inicioExistingText: document.getElementById("inicio-existing-text"),
+  btnInicioGotoSession: document.getElementById("btn-inicio-goto-session"),
+  btnInicioDiscard: document.getElementById("btn-inicio-discard"),
   btnShowImport: document.getElementById("btn-show-import"),
   importForm: document.getElementById("import-form"),
   importFileInput: document.getElementById("import-file-input"),
@@ -585,7 +638,12 @@ const el = {
   importAnchorRow: document.getElementById("import-anchor-row"),
   importAnchorTime: document.getElementById("import-anchor-time"),
   btnConfirmImport: document.getElementById("btn-confirm-import"),
-  viewSession: document.getElementById("view-session"),
+  btnGotoEdicion: document.getElementById("btn-goto-edicion"),
+
+  screenVivo: document.getElementById("screen-vivo"),
+  vivoEmptyState: document.getElementById("vivo-empty-state"),
+  vivoContent: document.getElementById("vivo-content"),
+  sessionNameDisplay: document.getElementById("session-name-display"),
   sessionStartTime: document.getElementById("session-start-time"),
   sessionElapsed: document.getElementById("session-elapsed"),
   sessionEndTime: document.getElementById("session-end-time"),
@@ -623,7 +681,15 @@ const el = {
   btnFinishActivity: document.getElementById("btn-finish-activity"),
   activitiesListWrap: document.getElementById("activities-list-wrap"),
   activitiesList: document.getElementById("activities-list"),
+
+  screenEdicion: document.getElementById("screen-edicion"),
+  edicionEmptyState: document.getElementById("edicion-empty-state"),
+  edicionContent: document.getElementById("edicion-content"),
   sessionSummary: document.getElementById("session-summary"),
+  summaryHeading: document.getElementById("summary-heading"),
+  summaryStartTime: document.getElementById("summary-start-time"),
+  summaryElapsed: document.getElementById("summary-elapsed"),
+  summaryEndTime: document.getElementById("summary-end-time"),
   sumBipPercent: document.getElementById("sum-bip-percent"),
   sumBipRatio: document.getElementById("sum-bip-ratio"),
   bipPercentNote: document.getElementById("bip-percent-note"),
@@ -647,13 +713,34 @@ const el = {
 function render() {
   syncWakeLock();
 
-  const hasSession = state.status !== "idle";
-  el.viewIdle.hidden = hasSession;
-  el.viewSession.hidden = !hasSession;
-  el.btnNewSession.hidden = !hasSession;
+  const idle = state.status === "idle";
+  const finished = state.status === "finished";
 
-  if (!hasSession) return;
+  // Pantalla 1: Inicio
+  el.inicioStartForm.hidden = !idle;
+  el.inicioExistingNotice.hidden = idle;
+  if (!idle) {
+    el.inicioExistingText.textContent = state.status === "running"
+      ? "Ya tenés una sesión en curso."
+      : "Tenés una sesión sin exportar.";
+  }
 
+  // Pantalla 2: Vivo
+  el.vivoContent.hidden = idle;
+  el.vivoEmptyState.hidden = !idle;
+
+  // Pantalla 3: Edición
+  el.edicionContent.hidden = !finished;
+  el.edicionEmptyState.hidden = finished;
+
+  if (idle) {
+    tick();
+    saveState();
+    return;
+  }
+
+  el.sessionNameDisplay.hidden = !state.name;
+  el.sessionNameDisplay.textContent = state.name;
   el.sessionStartTime.textContent = fmtClockTime(state.startedAt);
   el.sessionEndTime.textContent = state.endedAt ? fmtClockTime(state.endedAt) : "--:--:--";
   el.btnFinishSession.hidden = state.status !== "running";
@@ -696,8 +783,13 @@ function render() {
   renderFinishedActivities();
   renderTimeline();
 
-  el.sessionSummary.hidden = state.status !== "finished";
-  if (state.status === "finished") {
+  el.sessionSummary.hidden = !finished;
+  if (finished) {
+    el.summaryHeading.textContent = state.name || "Resumen de la sesión";
+    el.summaryStartTime.textContent = fmtClockTime(state.startedAt);
+    el.summaryElapsed.textContent = fmtHMS(clockElapsedMs(state.clock));
+    el.summaryEndTime.textContent = state.endedAt ? fmtClockTime(state.endedAt) : "--:--:--";
+
     const bipAgg = sessionBipStats();
     el.sumBipPercent.textContent = bipAgg.totalMs > 0 ? `${bipAgg.pct.toFixed(0)}%` : "—";
     el.sumBipRatio.textContent = bipAgg.totalMs > 0 ? formatRatio(bipAgg.ratio) : "—";
@@ -973,7 +1065,27 @@ setInterval(tick, 500);
 
 /* ---------- Wire up events ---------- */
 
-el.btnStartSession.addEventListener("click", startSession);
+el.btnStartSession.addEventListener("click", () => {
+  state.name = el.inputSessionName.value.trim();
+  el.inputSessionName.value = "";
+  startSession();
+  navigateTo("vivo");
+});
+
+el.navTabs.forEach((btn) => {
+  btn.addEventListener("click", () => navigateTo(btn.dataset.screen));
+});
+
+el.btnInicioGotoSession.addEventListener("click", () => {
+  navigateTo(state.status === "running" ? "vivo" : "edicion");
+});
+
+el.btnInicioDiscard.addEventListener("click", () => {
+  newSession();
+  el.inputSessionName.value = "";
+});
+
+el.btnGotoEdicion.addEventListener("click", () => navigateTo("edicion"));
 
 el.btnShowImport.addEventListener("click", () => {
   el.importForm.hidden = !el.importForm.hidden;
@@ -1018,9 +1130,13 @@ el.btnConfirmImport.addEventListener("click", () => {
   el.importFileInput.value = "";
   saveState();
   render();
+  navigateTo("edicion");
 });
 el.btnFinishSession.addEventListener("click", () => {
-  if (confirm("¿Finalizar la sesión?")) finishSession();
+  if (confirm("¿Finalizar la sesión?")) {
+    finishSession();
+    navigateTo("edicion");
+  }
 });
 el.btnStartActivity.addEventListener("click", () => {
   startActivity(el.inputActivityName.value);
@@ -1028,6 +1144,9 @@ el.btnStartActivity.addEventListener("click", () => {
 });
 el.inputActivityName.addEventListener("keydown", (e) => {
   if (e.key === "Enter") el.btnStartActivity.click();
+});
+el.inputSessionName.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el.btnStartSession.click();
 });
 el.sourceButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1067,8 +1186,8 @@ el.btnUndoLast.addEventListener("click", () => {
 el.btnExportCsv.addEventListener("click", exportCsv);
 el.btnExportPdf.addEventListener("click", () => window.print());
 el.btnShare.addEventListener("click", shareCsv);
-el.btnNewSession.addEventListener("click", newSession);
 
+window.addEventListener("hashchange", () => showScreen(currentScreen()));
 window.addEventListener("beforeunload", saveState);
 
 /* On a fresh page load (tab was closed, crashed, or reopened later — not a
@@ -1100,9 +1219,11 @@ el.btnRecoveryDiscard.addEventListener("click", () => {
   saveState();
   el.recoveryBanner.hidden = true;
   render();
+  navigateTo("inicio");
 });
 
 render();
+showScreen(currentScreen());
 maybeOfferSessionRecovery();
 
 if ("serviceWorker" in navigator) {
