@@ -301,7 +301,8 @@ function finishActivity(activityId, atIso, opts = {}) {
   if (!opts.skipRender) render();
 }
 
-/* Removes a single Live Feed line and keeps the timeline consistent:
+/* Removes a single Live Feed line (or, reused from Edit Mode, a segment/event
+   of an already-finished activity) and keeps the timeline consistent:
    - an event (ruck/kick) is just spliced out, nothing else depends on it.
    - a segment (a BIP/BOP phase change) is merged into the segment right
      before it, as if that particular toggle never happened — the previous
@@ -322,7 +323,10 @@ function undoFeedItem(activity, refType, refId) {
     const prev = activity.segments[idx - 1];
     prev.endedAt = removed.endedAt;
     activity.segments.splice(idx, 1);
-    if (activity.segments[activity.segments.length - 1] === prev) {
+    // Only a still-running activity has a meaningful "current phase" — a
+    // finished activity's phase always stays null, so Edit Mode deleting a
+    // segment there shouldn't resurrect it.
+    if (activity.status === "running" && activity.segments[activity.segments.length - 1] === prev) {
       activity.phase = prev.phase;
     }
   } else {
@@ -330,6 +334,77 @@ function undoFeedItem(activity, refType, refId) {
   }
   saveState();
   render();
+}
+
+function renameActivity(activityId, newName) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  activity.name = trimmed;
+  saveState();
+  render();
+}
+
+/* Moves the shared boundary between two adjacent segments (or an activity's
+   own start/end, at the very first/last segment) to correct a mistagged
+   BIP/BOP toggle without breaking the continuous timeline: segments always
+   have to butt up against each other with no gap or overlap, so moving one
+   edge always moves the matching edge of its neighbor along with it. Returns
+   {ok:true} or {ok:false, error} instead of throwing, since this is always
+   called from a form save button that needs to show *why* a value was
+   rejected, not just that it was. */
+function adjustSegmentBoundary(activityId, segmentId, edge, newIso) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity || activity.status !== "finished") return { ok: false, error: "La actividad no está finalizada." };
+  const idx = activity.segments.findIndex((s) => s.id === segmentId);
+  if (idx === -1) return { ok: false, error: "Tramo no encontrado." };
+  const seg = activity.segments[idx];
+  const newMs = Date.parse(newIso);
+  if (!Number.isFinite(newMs)) return { ok: false, error: "Hora inválida." };
+
+  if (edge === "start") {
+    const segEndMs = Date.parse(seg.endedAt);
+    if (newMs >= segEndMs) return { ok: false, error: "El inicio debe ser antes del fin de este tramo." };
+    if (idx > 0) {
+      const prev = activity.segments[idx - 1];
+      if (newMs <= Date.parse(prev.startedAt)) return { ok: false, error: "Chocaría con el tramo anterior." };
+      prev.endedAt = newIso;
+    } else {
+      activity.startedAt = newIso;
+    }
+    seg.startedAt = newIso;
+  } else {
+    const segStartMs = Date.parse(seg.startedAt);
+    if (newMs <= segStartMs) return { ok: false, error: "El fin debe ser después del inicio de este tramo." };
+    if (idx < activity.segments.length - 1) {
+      const next = activity.segments[idx + 1];
+      if (newMs >= Date.parse(next.endedAt)) return { ok: false, error: "Chocaría con el tramo siguiente." };
+      next.startedAt = newIso;
+    } else {
+      activity.endedAt = newIso;
+    }
+    seg.endedAt = newIso;
+  }
+  saveState();
+  render();
+  return { ok: true };
+}
+
+/* <input type="time"> only carries a wall-clock time, not a date — the
+   segment's own existing timestamp supplies the calendar day so edits can't
+   accidentally jump to a different date. */
+function isoToTimeInputValue(iso) {
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function timeInputValueToIso(baseIso, timeValue) {
+  const [h, m, s] = timeValue.split(":").map(Number);
+  const result = new Date(baseIso);
+  result.setHours(h, m, s || 0, 0);
+  return result.toISOString();
 }
 
 function newSession() {
@@ -685,6 +760,8 @@ const el = {
   screenEdicion: document.getElementById("screen-edicion"),
   edicionEmptyState: document.getElementById("edicion-empty-state"),
   edicionContent: document.getElementById("edicion-content"),
+  editWrap: document.getElementById("edit-wrap"),
+  editActivitiesList: document.getElementById("edit-activities-list"),
   sessionSummary: document.getElementById("session-summary"),
   summaryHeading: document.getElementById("summary-heading"),
   summaryStartTime: document.getElementById("summary-start-time"),
@@ -782,6 +859,8 @@ function render() {
 
   renderFinishedActivities();
   renderTimeline();
+
+  if (finished) renderEditPanel();
 
   el.sessionSummary.hidden = !finished;
   if (finished) {
@@ -909,6 +988,151 @@ function renderFinishedActivities() {
   });
 }
 
+/* ---------- Edit mode (Pantalla 3) ----------
+   Corrects tagging mistakes after a session is finished: rename an
+   activity, drag a BIP/BOP segment's start/end, or delete a stray
+   segment/event. Nothing here is stored separately — it mutates the same
+   segments/events arrays everything else reads, so every metric (%, ratio,
+   WCS, CSV/PDF) reflects a correction the moment it's saved. Rebuilt from
+   scratch on every render(), like the rest of the app; `expandedEditActivityIds`
+   is the one bit of UI-only state (which activities have their segment list
+   open) that render() itself doesn't own, so it survives across edits instead
+   of collapsing every time you save one field. */
+
+const expandedEditActivityIds = new Set();
+
+function renderEditPanel() {
+  const finished = state.activities.filter((a) => a.status === "finished");
+  el.editWrap.hidden = finished.length === 0;
+  el.editActivitiesList.innerHTML = "";
+
+  finished.forEach((activity) => {
+    const stats = activityStats(activity);
+    const li = document.createElement("li");
+    li.className = "edit-activity";
+
+    const header = document.createElement("div");
+    header.className = "edit-activity-header";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "edit-activity-name-input";
+    nameInput.maxLength = 60;
+    nameInput.value = activity.name;
+    const saveNameBtn = document.createElement("button");
+    saveNameBtn.type = "button";
+    saveNameBtn.className = "edit-save-name-btn";
+    saveNameBtn.textContent = "Guardar";
+    saveNameBtn.addEventListener("click", () => renameActivity(activity.id, nameInput.value));
+    header.append(nameInput, saveNameBtn);
+    li.appendChild(header);
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "edit-toggle-segments-btn link-btn";
+    const segWrap = document.createElement("div");
+    segWrap.className = "edit-segments";
+    if (stats.tracked) {
+      toggleBtn.textContent = `Ver tramos (${activity.segments.length})`;
+      segWrap.hidden = !expandedEditActivityIds.has(activity.id);
+      toggleBtn.addEventListener("click", () => {
+        segWrap.hidden = !segWrap.hidden;
+        if (segWrap.hidden) expandedEditActivityIds.delete(activity.id);
+        else expandedEditActivityIds.add(activity.id);
+      });
+    } else {
+      toggleBtn.textContent = "Sin tramos BIP/BOP (actividad sin medir)";
+      toggleBtn.disabled = true;
+      segWrap.hidden = true;
+    }
+    li.appendChild(toggleBtn);
+
+    activity.segments.forEach((seg, idx) => {
+      const row = document.createElement("div");
+      row.className = "edit-segment-row";
+      row.dataset.segmentId = seg.id;
+
+      const phaseSpan = document.createElement("span");
+      phaseSpan.className = `edit-segment-phase ${seg.phase.toLowerCase()}`;
+      phaseSpan.textContent = seg.phase;
+
+      const startInput = document.createElement("input");
+      startInput.type = "time";
+      startInput.step = "1";
+      startInput.value = isoToTimeInputValue(seg.startedAt);
+
+      const endInput = document.createElement("input");
+      endInput.type = "time";
+      endInput.step = "1";
+      endInput.value = isoToTimeInputValue(seg.endedAt);
+
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "edit-segment-save-btn";
+      saveBtn.textContent = "Guardar";
+      saveBtn.addEventListener("click", () => {
+        const newStartIso = timeInputValueToIso(seg.startedAt, startInput.value);
+        const newEndIso = timeInputValueToIso(seg.endedAt, endInput.value);
+        let result = { ok: true };
+        if (newStartIso !== seg.startedAt) result = adjustSegmentBoundary(activity.id, seg.id, "start", newStartIso);
+        if (result.ok && newEndIso !== seg.endedAt) result = adjustSegmentBoundary(activity.id, seg.id, "end", newEndIso);
+        if (!result.ok) alert(result.error);
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "edit-segment-delete-btn";
+      deleteBtn.textContent = "Borrar tramo";
+      if (idx === 0) {
+        deleteBtn.disabled = true;
+      } else {
+        deleteBtn.addEventListener("click", () => {
+          if (confirm("¿Borrar este tramo? Se une con el tramo anterior.")) {
+            undoFeedItem(activity, "segment", seg.id);
+          }
+        });
+      }
+
+      row.append(phaseSpan, startInput, endInput, saveBtn, deleteBtn);
+      segWrap.appendChild(row);
+    });
+    li.appendChild(segWrap);
+
+    if (activity.events.length) {
+      const eventsWrap = document.createElement("div");
+      eventsWrap.className = "edit-events";
+      activity.events.forEach((ev) => {
+        const row = document.createElement("div");
+        row.className = "edit-event-row";
+        const label = document.createElement("span");
+        label.textContent = `${ev.type === "RUCK" ? "Ruck" : "Patada"} — ${fmtClockTime(ev.at)}`;
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "edit-event-delete-btn";
+        delBtn.textContent = "Borrar";
+        delBtn.addEventListener("click", () => undoFeedItem(activity, "event", ev.id));
+        row.append(label, delBtn);
+        eventsWrap.appendChild(row);
+      });
+      li.appendChild(eventsWrap);
+    }
+
+    el.editActivitiesList.appendChild(li);
+  });
+}
+
+/* Lets tapping a BIP/BOP block directly on the timeline jump straight to
+   that segment's editable row, instead of only being reachable by scrolling
+   through the activity list. */
+function focusEditSegment(activityId, segmentId) {
+  expandedEditActivityIds.add(activityId);
+  renderEditPanel();
+  const row = el.editActivitiesList.querySelector(`[data-segment-id="${segmentId}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("edit-segment-flash");
+  setTimeout(() => row.classList.remove("edit-segment-flash"), 1200);
+}
+
 /* ---------- Timeline (Gantt) ---------- */
 
 function niceTickMinutes(totalMs) {
@@ -1004,7 +1228,9 @@ function renderTimeline() {
           ? `BIP · balón en juego (${SOURCE_LABELS[seg.source] || "origen desconocido"})`
           : "BOP · fuera de juego";
         const text = `${phaseLabel} — ${fmtClockTime(seg.startedAt)}–${fmtClockTime(seg.endedAt || activity.endedAt)} (${fmtHMS(segEndMs - segStartMs)})`;
-        fill.appendChild(makeSeg(seg.phase.toLowerCase(), left, width, text));
+        const segEl = makeSeg(seg.phase.toLowerCase(), left, width, text);
+        segEl.addEventListener("click", () => focusEditSegment(activity.id, seg.id));
+        fill.appendChild(segEl);
       });
     } else {
       const left = pct(actStartMs - fullStartMs);

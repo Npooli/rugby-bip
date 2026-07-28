@@ -802,6 +802,148 @@ main {
   line-height: 1.4;
 }
 
+.edit-activities-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.edit-activity {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.edit-activity-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.edit-activity-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.edit-save-name-btn,
+.edit-segment-save-btn,
+.edit-segment-delete-btn,
+.edit-event-delete-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-save-name-btn,
+.edit-segment-save-btn {
+  background: var(--action);
+  color: var(--action-ink);
+}
+
+.edit-segment-delete-btn,
+.edit-event-delete-btn {
+  background: transparent;
+  color: var(--danger);
+  border: 1.5px solid var(--danger);
+}
+
+.edit-segment-delete-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  border-color: var(--panel-border);
+  color: var(--muted);
+}
+
+.edit-toggle-segments-btn {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.edit-toggle-segments-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.edit-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.edit-segment-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--panel-high);
+  border-radius: 8px;
+  padding: 8px;
+  transition: box-shadow 0.3s ease;
+}
+
+@keyframes edit-segment-flash-anim {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 2px var(--action); }
+}
+
+.edit-segment-flash {
+  animation: edit-segment-flash-anim 1.2s ease;
+}
+
+.edit-segment-phase {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.edit-segment-phase.bip { background: rgba(74, 222, 128, 0.18); color: var(--bip); }
+.edit-segment-phase.bop { background: rgba(209, 132, 10, 0.18); color: var(--bop); }
+
+.edit-segment-row input[type="time"] {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.edit-events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--panel-high);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .summary-subhead {
   margin: 0 0 8px;
   font-size: 12px;
@@ -1078,7 +1220,8 @@ main {
 @media print {
   .topbar, #screen-inicio, .session-card .big-btn, #new-activity-form,
   #active-activity, .link-btn, .app-footer, .export-row,
-  .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row {
+  .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row,
+  #edit-wrap {
     display: none !important;
   }
 
