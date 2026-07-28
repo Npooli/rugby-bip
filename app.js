@@ -612,6 +612,85 @@ async function shareCsv() {
   }
 }
 
+/* ---------- Export / Import JSON ----------
+   Unlike CSV (a flattened summary meant for spreadsheets) or the Angles
+   importer (translating someone else's format into ours), JSON export is
+   just `state` itself — everything needed to keep editing a session later
+   (activities, every segment/event timestamp, restart sources) is already
+   there, so no extra shape is needed to make it round-trip.
+
+   Import is intentionally more lenient than loadState()'s localStorage
+   check: that one discards anything that doesn't match SCHEMA_VERSION
+   exactly, which is fine for a same-device autosave, but wrong here — the
+   whole point of a JSON export is to still open correctly after the app
+   itself has moved on to a newer schema. Missing fields get sane defaults
+   instead of the import being refused outright. An imported session is
+   always treated as finished/reviewable (never a live one to resume),
+   since the export button itself only ever appears once a session already
+   finished. */
+
+function buildSessionJson() {
+  return JSON.stringify(state, null, 2);
+}
+
+function jsonFileName() {
+  const stamp = (state.startedAt || nowIso()).replace(/[:.]/g, "-");
+  const slug = slugify(state.name);
+  return `${slug || "cronosesion"}_${stamp}.json`;
+}
+
+function exportSessionJson() {
+  const json = buildSessionJson();
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = jsonFileName();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function normalizeImportedSession(parsed) {
+  if (!parsed || !Array.isArray(parsed.activities)) {
+    throw new Error("El archivo no tiene el formato de una sesión de Rugby BIP.");
+  }
+  const activities = parsed.activities.map((a) => ({
+    id: a.id || uid(),
+    name: a.name || "Actividad sin nombre",
+    startedAt: a.startedAt || null,
+    endedAt: a.endedAt || null,
+    status: "finished",
+    phase: null,
+    segments: (a.segments || []).map((s) => ({
+      id: s.id || uid(),
+      phase: s.phase,
+      source: s.source,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt
+    })),
+    events: (a.events || []).map((e) => ({
+      id: e.id || uid(),
+      type: e.type,
+      at: e.at
+    }))
+  }));
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: parsed.id || uid(),
+    name: parsed.name || "",
+    startedAt: parsed.startedAt || null,
+    endedAt: parsed.endedAt || null,
+    status: "finished",
+    clock: parsed.clock && typeof parsed.clock.elapsedMs === "number"
+      ? { elapsedMs: parsed.clock.elapsedMs, lastStartedAt: null, running: false }
+      : createClock(),
+    activities,
+    runningActivityId: null
+  };
+}
+
 /* ---------- Import from Angles XML ----------
    Angles exports a Sportscode-style timeline XML (UTF-16, one <instance> per
    coded event with <code>/<start>/<end> in seconds from the video's zero
@@ -758,6 +837,10 @@ const el = {
   activitiesList: document.getElementById("activities-list"),
 
   screenEdicion: document.getElementById("screen-edicion"),
+  btnShowImportJson: document.getElementById("btn-show-import-json"),
+  importJsonForm: document.getElementById("import-json-form"),
+  importJsonFileInput: document.getElementById("import-json-file-input"),
+  importJsonStatus: document.getElementById("import-json-status"),
   edicionEmptyState: document.getElementById("edicion-empty-state"),
   edicionContent: document.getElementById("edicion-content"),
   editWrap: document.getElementById("edit-wrap"),
@@ -783,6 +866,7 @@ const el = {
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
   btnExportCsv: document.getElementById("btn-export-csv"),
+  btnExportJson: document.getElementById("btn-export-json"),
   btnExportPdf: document.getElementById("btn-export-pdf"),
   btnShare: document.getElementById("btn-share")
 };
@@ -1410,8 +1494,36 @@ el.btnUndoLast.addEventListener("click", () => {
   if (items[0] && items[0].canUndo) undoFeedItem(active, items[0].refType, items[0].refId);
 });
 el.btnExportCsv.addEventListener("click", exportCsv);
+el.btnExportJson.addEventListener("click", exportSessionJson);
 el.btnExportPdf.addEventListener("click", () => window.print());
 el.btnShare.addEventListener("click", shareCsv);
+
+el.btnShowImportJson.addEventListener("click", () => {
+  el.importJsonForm.hidden = !el.importJsonForm.hidden;
+});
+
+el.importJsonFileInput.addEventListener("change", async () => {
+  const file = el.importJsonFileInput.files[0];
+  if (!file) return;
+  el.importJsonStatus.textContent = "Leyendo archivo...";
+  try {
+    const text = await file.text();
+    const normalized = normalizeImportedSession(JSON.parse(text));
+    if (state.status !== "idle") {
+      const ok = confirm("Esto reemplaza la sesión actual sin exportar. ¿Continuar?");
+      if (!ok) { el.importJsonFileInput.value = ""; el.importJsonStatus.textContent = ""; return; }
+    }
+    state = normalized;
+    el.importJsonForm.hidden = true;
+    el.importJsonFileInput.value = "";
+    el.importJsonStatus.textContent = "";
+    saveState();
+    render();
+    navigateTo("edicion");
+  } catch (err) {
+    el.importJsonStatus.textContent = `Error: ${err.message}`;
+  }
+});
 
 window.addEventListener("hashchange", () => showScreen(currentScreen()));
 window.addEventListener("beforeunload", saveState);

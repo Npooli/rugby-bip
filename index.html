@@ -211,7 +211,16 @@
   <!-- ============ PANTALLA 3: EDICIÓN + EXPORTACIÓN ============ -->
   <section id="screen-edicion" class="view" hidden>
 
-    <p id="edicion-empty-state" class="empty-state" hidden>Todavía no hay ninguna sesión para editar. Grabá una nueva desde Inicio o importá un XML.</p>
+    <div class="import-section">
+      <button id="btn-show-import-json" class="link-btn">Importar sesión (JSON)</button>
+      <div id="import-json-form" class="card" hidden>
+        <h2>Importar sesión desde JSON</h2>
+        <input type="file" id="import-json-file-input" accept=".json,application/json">
+        <p id="import-json-status" class="import-status"></p>
+      </div>
+    </div>
+
+    <p id="edicion-empty-state" class="empty-state" hidden>Todavía no hay ninguna sesión para editar. Grabá una nueva desde Inicio, importá un XML, o abrí un JSON exportado antes.</p>
 
     <div id="edicion-content">
       <!-- Timeline visual de la sesión -->
@@ -281,6 +290,7 @@
 
         <div class="export-row">
           <button id="btn-export-csv" class="big-btn export">Descargar CSV</button>
+          <button id="btn-export-json" class="big-btn export-outline">Descargar JSON</button>
           <button id="btn-export-pdf" class="big-btn export-outline">Descargar PDF</button>
           <button id="btn-share" class="big-btn export-outline">Compartir</button>
         </div>

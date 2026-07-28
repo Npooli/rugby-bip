@@ -1168,12 +1168,14 @@ main {
   text-align: center;
 }
 
-#import-form {
+#import-form,
+#import-json-form {
   text-align: left;
   margin-top: 14px;
 }
 
-#import-form input[type="file"] {
+#import-form input[type="file"],
+#import-json-form input[type="file"] {
   width: 100%;
   color: var(--text);
   font-size: 14px;
@@ -1221,7 +1223,7 @@ main {
   .topbar, #screen-inicio, .session-card .big-btn, #new-activity-form,
   #active-activity, .link-btn, .app-footer, .export-row,
   .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row,
-  #edit-wrap {
+  #edit-wrap, .import-section {
     display: none !important;
   }
 
