@@ -748,7 +748,8 @@ main {
   background: var(--bip);
 }
 
-#activities-list {
+#activities-list,
+#summary-activities-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -757,18 +758,25 @@ main {
   gap: 10px;
 }
 
-#activities-list li {
+#summary-activities-list {
+  margin-bottom: 18px;
+}
+
+#activities-list li,
+#summary-activities-list li {
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 12px;
 }
 
-#activities-list .act-name {
+#activities-list .act-name,
+#summary-activities-list .act-name {
   font-weight: 700;
   margin-bottom: 4px;
 }
 
-#activities-list .act-meta {
+#activities-list .act-meta,
+#summary-activities-list .act-meta {
   font-size: 13px;
   color: var(--muted);
   display: flex;
@@ -776,8 +784,10 @@ main {
   gap: 4px 10px;
 }
 
-#activities-list .bip-tag { color: var(--bip); font-weight: 700; }
-#activities-list .bop-tag { color: var(--bop); font-weight: 700; }
+#activities-list .bip-tag,
+#summary-activities-list .bip-tag { color: var(--bip); font-weight: 700; }
+#activities-list .bop-tag,
+#summary-activities-list .bop-tag { color: var(--bop); font-weight: 700; }
 
 .act-resume-row {
   margin-top: 8px;
@@ -1251,7 +1261,7 @@ main {
     color: #555 !important;
   }
 
-  .summary-grid > div, #activities-list li, .timeline-track {
+  .summary-grid > div, #activities-list li, #summary-activities-list li, .timeline-track {
     background: #f2f2f2;
     border-color: #ccc;
   }

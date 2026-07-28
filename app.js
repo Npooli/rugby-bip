@@ -850,6 +850,8 @@ const el = {
   summaryStartTime: document.getElementById("summary-start-time"),
   summaryElapsed: document.getElementById("summary-elapsed"),
   summaryEndTime: document.getElementById("summary-end-time"),
+  summaryActivitiesWrap: document.getElementById("summary-activities-wrap"),
+  summaryActivitiesList: document.getElementById("summary-activities-list"),
   sumBipPercent: document.getElementById("sum-bip-percent"),
   sumBipRatio: document.getElementById("sum-bip-ratio"),
   bipPercentNote: document.getElementById("bip-percent-note"),
@@ -893,6 +895,11 @@ function render() {
   // Pantalla 3: Edición
   el.edicionContent.hidden = !finished;
   el.edicionEmptyState.hidden = finished;
+  if (!finished) {
+    el.edicionEmptyState.textContent = idle
+      ? "Todavía no hay ninguna sesión para editar. Grabá una nueva desde Inicio, importá un XML, o abrí un JSON exportado antes."
+      : "Tu sesión sigue en curso. Volvé a Vivo o finalizala para poder editarla.";
+  }
 
   if (idle) {
     tick();
@@ -1035,10 +1042,38 @@ function renderLiveFeed(activity) {
     : `<li class="live-feed-empty" style="border:none;background:none;">Sin eventos todavía</li>`;
 }
 
+function buildActivityListItem(activity, onResume) {
+  const stats = activityStats(activity);
+  const li = document.createElement("li");
+  const bipMeta = stats.tracked ? `
+      <span class="bip-tag">BIP ${fmtHMS(stats.bipMs)}</span>
+      <span class="bop-tag">BOP ${fmtHMS(stats.bopMs)}</span>
+      <span>${stats.pct.toFixed(0)}% juego real</span>
+      <span>ratio ${formatRatio(stats.ratio)}</span>` : `
+      <span class="bip-tag" style="color:var(--untracked)">sin medir BIP</span>`;
+  li.innerHTML = `
+    <div class="act-name">${escapeHtml(activity.name)}</div>
+    <div class="act-meta">
+      <span>${fmtClockTime(activity.startedAt)} → ${fmtClockTime(activity.endedAt)}</span>
+      <span>${fmtHMS(stats.totalMs)} total</span>${bipMeta}
+    </div>`;
+  if (onResume) {
+    const resumeRow = document.createElement("div");
+    resumeRow.className = "act-resume-row";
+    resumeRow.innerHTML = `<button class="resume-btn">Reanudar esta actividad</button>`;
+    resumeRow.querySelector("button").addEventListener("click", onResume);
+    li.appendChild(resumeRow);
+  }
+  return li;
+}
+
+/* Renders the finished-activities recap in two places: the live "Vivo"
+   screen (where, mid-session, the very last one can still be reopened via
+   "Reanudar") and a read-only copy inside the Pantalla 3 summary — the only
+   one of the two that's actually visible (and print-able) once the screen
+   split moved Vivo's copy behind a hidden sibling section after finishing. */
 function renderFinishedActivities() {
   const finished = state.activities.filter((a) => a.status === "finished");
-  el.activitiesListWrap.hidden = finished.length === 0;
-  el.activitiesList.innerHTML = "";
   const canResume = state.status === "running" && !state.runningActivityId
     && state.activities.length > 0
     && state.activities[state.activities.length - 1].status === "finished";
@@ -1046,29 +1081,17 @@ function renderFinishedActivities() {
     ? state.activities[state.activities.length - 1].id
     : null;
 
+  el.activitiesListWrap.hidden = finished.length === 0;
+  el.activitiesList.innerHTML = "";
   finished.forEach((activity) => {
-    const stats = activityStats(activity);
-    const li = document.createElement("li");
-    const bipMeta = stats.tracked ? `
-        <span class="bip-tag">BIP ${fmtHMS(stats.bipMs)}</span>
-        <span class="bop-tag">BOP ${fmtHMS(stats.bopMs)}</span>
-        <span>${stats.pct.toFixed(0)}% juego real</span>
-        <span>ratio ${formatRatio(stats.ratio)}</span>` : `
-        <span class="bip-tag" style="color:var(--untracked)">sin medir BIP</span>`;
-    li.innerHTML = `
-      <div class="act-name">${escapeHtml(activity.name)}</div>
-      <div class="act-meta">
-        <span>${fmtClockTime(activity.startedAt)} → ${fmtClockTime(activity.endedAt)}</span>
-        <span>${fmtHMS(stats.totalMs)} total</span>${bipMeta}
-      </div>`;
-    if (canResume && activity.id === lastActivityId) {
-      const resumeRow = document.createElement("div");
-      resumeRow.className = "act-resume-row";
-      resumeRow.innerHTML = `<button class="resume-btn">Reanudar esta actividad</button>`;
-      resumeRow.querySelector("button").addEventListener("click", reopenLastActivity);
-      li.appendChild(resumeRow);
-    }
-    el.activitiesList.appendChild(li);
+    const resumable = canResume && activity.id === lastActivityId;
+    el.activitiesList.appendChild(buildActivityListItem(activity, resumable ? reopenLastActivity : null));
+  });
+
+  el.summaryActivitiesWrap.hidden = finished.length === 0;
+  el.summaryActivitiesList.innerHTML = "";
+  finished.forEach((activity) => {
+    el.summaryActivitiesList.appendChild(buildActivityListItem(activity, null));
   });
 }
 
