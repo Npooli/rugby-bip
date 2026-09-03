@@ -97,14 +97,14 @@
         <button id="btn-finish-session" class="big-btn stop">Finalizar sesión</button>
       </div>
 
-      <!-- Formulario nueva actividad -->
+      <!-- Formulario nuevo período -->
       <div id="new-activity-form" class="card">
-        <h2>Nueva actividad</h2>
-        <input id="input-activity-name" type="text" placeholder="Nombre de la actividad (ej. Entrada en calor)" maxlength="60">
-        <button id="btn-start-activity" class="big-btn start">Iniciar actividad</button>
+        <h2>Nuevo período</h2>
+        <input id="input-activity-name" type="text" placeholder="Nombre del período (ej. Entrada en calor)" maxlength="60">
+        <button id="btn-start-activity" class="big-btn start">Iniciar período</button>
       </div>
 
-      <!-- Actividad en curso -->
+      <!-- Período en curso -->
       <div id="active-activity" class="card active-activity" hidden>
         <h2 id="active-activity-name">—</h2>
         <div class="activity-times">
@@ -197,12 +197,12 @@
           </div>
         </div>
 
-        <button id="btn-finish-activity" class="big-btn stop">Finalizar actividad</button>
+        <button id="btn-finish-activity" class="big-btn stop">Finalizar período</button>
       </div>
 
-      <!-- Actividades completadas -->
+      <!-- Períodos completados -->
       <div id="activities-list-wrap" class="card" hidden>
-        <h2>Actividades completadas</h2>
+        <h2>Períodos completados</h2>
         <ul id="activities-list"></ul>
       </div>
     </div>
@@ -229,7 +229,7 @@
         <div class="timeline-legend">
           <span class="legend-item"><span class="legend-swatch bip"></span>BIP · balón en juego</span>
           <span class="legend-item"><span class="legend-swatch bop"></span>BOP · fuera de juego</span>
-          <span class="legend-item"><span class="legend-swatch gap"></span>Sin actividad</span>
+          <span class="legend-item"><span class="legend-swatch gap"></span>Sin período</span>
           <span class="legend-item"><span class="legend-swatch untracked"></span>Sin medir BIP</span>
           <span class="legend-item"><span class="legend-dot"></span>Ruck / Patada</span>
         </div>
@@ -240,7 +240,7 @@
 
       <!-- Modo edición: corregir nombre, límites de tramos BIP/BOP y eventos sueltos -->
       <div id="edit-wrap" class="card" hidden>
-        <h2>Editar actividades</h2>
+        <h2>Editar períodos</h2>
         <ul id="edit-activities-list" class="edit-activities-list"></ul>
       </div>
 
@@ -254,7 +254,7 @@
         </div>
 
         <div id="summary-activities-wrap" hidden>
-          <h3 class="summary-subhead">Actividades</h3>
+          <h3 class="summary-subhead">Períodos</h3>
           <ul id="summary-activities-list"></ul>
         </div>
 

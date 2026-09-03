@@ -213,7 +213,7 @@ function startActivity(name) {
   const t = nowIso();
   const activity = {
     id: uid(),
-    name: name.trim() || "Actividad sin nombre",
+    name: name.trim() || "Período sin nombre",
     startedAt: t,
     endedAt: null,
     status: "running",
@@ -356,7 +356,7 @@ function renameActivity(activityId, newName) {
    rejected, not just that it was. */
 function adjustSegmentBoundary(activityId, segmentId, edge, newIso) {
   const activity = state.activities.find((a) => a.id === activityId);
-  if (!activity || activity.status !== "finished") return { ok: false, error: "La actividad no está finalizada." };
+  if (!activity || activity.status !== "finished") return { ok: false, error: "El período no está finalizado." };
   const idx = activity.segments.findIndex((s) => s.id === segmentId);
   if (idx === -1) return { ok: false, error: "Tramo no encontrado." };
   const seg = activity.segments[idx];
@@ -658,7 +658,7 @@ function normalizeImportedSession(parsed) {
   }
   const activities = parsed.activities.map((a) => ({
     id: a.id || uid(),
-    name: a.name || "Actividad sin nombre",
+    name: a.name || "Período sin nombre",
     startedAt: a.startedAt || null,
     endedAt: a.endedAt || null,
     status: "finished",
@@ -964,8 +964,8 @@ function render() {
     el.sumBipPercent.textContent = bipAgg.totalMs > 0 ? `${bipAgg.pct.toFixed(0)}%` : "—";
     el.sumBipRatio.textContent = bipAgg.totalMs > 0 ? formatRatio(bipAgg.ratio) : "—";
     el.bipPercentNote.textContent = bipAgg.totalCount > bipAgg.trackedCount
-      ? `Calculado sobre ${bipAgg.trackedCount} de ${bipAgg.totalCount} actividades (las que midieron BIP). No incluye el tiempo de las actividades sin medir.`
-      : `Calculado sobre las ${bipAgg.trackedCount} actividades de la sesión.`;
+      ? `Calculado sobre ${bipAgg.trackedCount} de ${bipAgg.totalCount} períodos (los que midieron BIP). No incluye el tiempo de los períodos sin medir.`
+      : `Calculado sobre los ${bipAgg.trackedCount} períodos de la sesión.`;
 
     const { sourceCounts, eventCounts } = sessionAggregates();
     el.sumScrum.textContent = sourceCounts.scrum;
@@ -1060,7 +1060,7 @@ function buildActivityListItem(activity, onResume) {
   if (onResume) {
     const resumeRow = document.createElement("div");
     resumeRow.className = "act-resume-row";
-    resumeRow.innerHTML = `<button class="resume-btn">Reanudar esta actividad</button>`;
+    resumeRow.innerHTML = `<button class="resume-btn">Reanudar este período</button>`;
     resumeRow.querySelector("button").addEventListener("click", onResume);
     li.appendChild(resumeRow);
   }
@@ -1147,7 +1147,7 @@ function renderEditPanel() {
         else expandedEditActivityIds.add(activity.id);
       });
     } else {
-      toggleBtn.textContent = "Sin tramos BIP/BOP (actividad sin medir)";
+      toggleBtn.textContent = "Sin tramos BIP/BOP (período sin medir)";
       toggleBtn.disabled = true;
       segWrap.hidden = true;
     }
@@ -1322,7 +1322,7 @@ function renderTimeline() {
     track.appendChild(fill);
 
     if (actStartMs > fullStartMs) {
-      fill.appendChild(makeSeg("gap", 0, pct(actStartMs - fullStartMs), "Sin actividad registrada"));
+      fill.appendChild(makeSeg("gap", 0, pct(actStartMs - fullStartMs), "Sin período registrado"));
     }
 
     if (stats.tracked) {
@@ -1347,7 +1347,7 @@ function renderTimeline() {
     }
 
     if (actEndMs < fullEndMs) {
-      fill.appendChild(makeSeg("gap", pct(actEndMs - fullStartMs), pct(fullEndMs - actEndMs), "Sin actividad registrada"));
+      fill.appendChild(makeSeg("gap", pct(actEndMs - fullStartMs), pct(fullEndMs - actEndMs), "Sin período registrado"));
     }
 
     activity.events.forEach((ev) => {
@@ -1501,7 +1501,7 @@ el.btnLogKick.addEventListener("click", () => {
 });
 el.btnFinishActivity.addEventListener("click", () => {
   const active = currentActivity();
-  if (active && confirm(`¿Finalizar la actividad "${active.name}"?`)) finishActivity(active.id);
+  if (active && confirm(`¿Finalizar el período "${active.name}"?`)) finishActivity(active.id);
 });
 el.liveFeedList.addEventListener("click", (e) => {
   const btn = e.target.closest(".feed-delete-btn");
@@ -1564,7 +1564,7 @@ function maybeOfferSessionRecovery() {
   if (state.status !== "running") return;
   const startedLabel = fmtClockTime(state.startedAt);
   const elapsedLabel = fmtHMS(clockElapsedMs(state.clock));
-  const activityNote = currentActivity() ? ` (actividad "${escapeHtml(currentActivity().name)}" en curso)` : "";
+  const activityNote = currentActivity() ? ` (período "${escapeHtml(currentActivity().name)}" en curso)` : "";
   el.recoveryText.innerHTML = `Empezó a las <strong>${startedLabel}</strong> y lleva <strong>${elapsedLabel}</strong>${activityNote}. ¿Querés seguir con ella o descartarla y empezar de cero?`;
   el.recoveryBanner.hidden = false;
 }
