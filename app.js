@@ -1040,8 +1040,6 @@ function render() {
   saveState();
 }
 
-const FEED_MAX_ITEMS = 8;
-
 /* A chronological feed of what just happened in the current activity —
    restart taps, BOP switches, ruck/kick counts — newest first. Built fresh
    from segments/events each render rather than stored separately, so it
@@ -1066,14 +1064,16 @@ function buildFeedItems(activity) {
   return items;
 }
 
+/* Grows with the page instead of being capped in its own scroll box — that
+   cap existed to keep the feed from crowding the old sticky-bottom control
+   panel, which is gone now, so there's no reason left to hide older items. */
 function renderLiveFeed(activity) {
   const items = buildFeedItems(activity);
-  const latest = items.slice(0, FEED_MAX_ITEMS);
 
   el.btnUndoLast.disabled = !(items[0] && items[0].canUndo);
 
-  el.liveFeedList.innerHTML = latest.length
-    ? latest.map((item) => `
+  el.liveFeedList.innerHTML = items.length
+    ? items.map((item) => `
         <li class="${item.kind}">
           <time>${fmtClockTime(item.at)}</time>
           <span class="feed-text">${escapeHtml(item.text)}</span>

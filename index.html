@@ -151,16 +151,7 @@
           </div>
         </div>
 
-        <!-- Secundario: historial de lo que pasó. Scrollea dentro de su propio
-             espacio en vez de empujar los controles táctiles fuera de pantalla. -->
-        <div class="live-feed-header">
-          <h3 class="label">Live Feed</h3>
-          <span class="live-feed-dot"></span>
-          <button id="btn-undo-last" class="link-btn feed-undo-btn" type="button">Deshacer último</button>
-        </div>
-        <ul id="live-feed-list" class="live-feed-list"></ul>
-
-        <!-- Zona del pulgar: todo lo que se toca en vivo, siempre a mano abajo. -->
+        <!-- Control de origen: lo que se toca para arrancar/cortar cada tramo. -->
         <div id="live-controls-zone" class="live-controls-zone">
           <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
           <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
@@ -197,6 +188,15 @@
             </button>
           </div>
         </div>
+
+        <!-- Secundario: historial de lo que pasó. Crece debajo de los
+             controles, con su propio scroll interno acotado. -->
+        <div class="live-feed-header">
+          <h3 class="label">Live Feed</h3>
+          <span class="live-feed-dot"></span>
+          <button id="btn-undo-last" class="link-btn feed-undo-btn" type="button">Deshacer último</button>
+        </div>
+        <ul id="live-feed-list" class="live-feed-list"></ul>
 
         <button id="btn-finish-activity" class="big-btn stop">Finalizar período</button>
       </div>

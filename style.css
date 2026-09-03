@@ -511,18 +511,14 @@ main {
   opacity: 0.7;
 }
 
-/* Thumb zone: everything tapped live (restart origin, BOP toggle, ruck/kick)
-   lives in here, sticky to the bottom of the viewport so it stays reachable
-   with one hand even while the feed/stats above it scroll out of view. */
+/* Everything tapped live (restart origin, BOP toggle, ruck/kick) — flows
+   normally in the page now (used to be pinned with position: sticky, but
+   that combined badly with the card's backdrop-filter blur on iOS Safari
+   and felt disorienting with the feed scrolling "behind" a fixed panel). */
 .live-controls-zone {
-  position: sticky;
-  bottom: 0;
-  background: var(--panel);
-  margin: 0 -20px -20px;
-  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--panel-border);
-  border-radius: 0 0 var(--radius) var(--radius);
-  z-index: 3;
+  padding-top: 14px;
+  margin-bottom: 14px;
 }
 
 .source-hint {
@@ -601,8 +597,6 @@ main {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 160px;
-  overflow-y: auto;
 }
 
 .live-feed-list li {
