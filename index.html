@@ -36,6 +36,10 @@
 
 <main id="app">
 
+  <!-- Visible en cualquier pantalla si el último guardado falló (memoria
+       llena, guardado bloqueado por el navegador, etc.) -->
+  <p id="save-warning" class="save-warning" hidden>⚠ No se pudo guardar el progreso en este celular (memoria llena o el navegador bloqueó el guardado). Exportá ahora (CSV/JSON) para no perder los datos.</p>
+
   <!-- Se muestra en vez de todo lo demás si al cargar la app hay una sesión
        que quedó corriendo (cierre de pestaña, recarga, crash) -->
   <section id="recovery-banner" class="card recovery-banner" hidden>
@@ -87,6 +91,8 @@
     <p id="vivo-empty-state" class="empty-state" hidden>No hay una sesión en vivo. Volvé a Inicio para arrancar una.</p>
 
     <div id="vivo-content">
+      <p id="wake-lock-warning" class="wake-lock-warning" hidden>⚠ Este navegador no puede mantener la pantalla encendida sola durante la sesión. Configurá el auto-bloqueo del celular en el más largo posible (o "Nunca") mientras registrás en vivo.</p>
+
       <div class="session-card">
         <h2 id="session-name-display" class="session-name-display" hidden></h2>
         <div class="session-times">

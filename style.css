@@ -317,6 +317,18 @@ main {
   padding: 32px 12px;
 }
 
+.wake-lock-warning,
+.save-warning {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--danger);
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .idle-tagline {
   margin-top: 32px;
   text-align: center;
@@ -1272,7 +1284,8 @@ main {
   .topbar, #screen-inicio, .session-card .big-btn, #new-activity-form,
   #active-activity, .link-btn, .app-footer, .export-row,
   .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row,
-  #edit-wrap, .import-section, .wcs-filter-row {
+  #edit-wrap, .import-section, .wcs-filter-row,
+  #recovery-banner, .save-warning, .wake-lock-warning {
     display: none !important;
   }
 

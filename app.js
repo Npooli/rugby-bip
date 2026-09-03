@@ -102,6 +102,11 @@ async function releaseWakeLockIfHeld() {
 function syncWakeLock() {
   if (state.status === "running") requestWakeLock();
   else releaseWakeLockIfHeld();
+  // Older Safari (iOS < 16.4) has no Wake Lock API at all — `"wakeLock" in
+  // navigator` is a reliable, false-positive-free way to detect that (unlike
+  // a request() failure, which can also happen transiently for reasons that
+  // resolve themselves, e.g. the tab being hidden at that exact moment).
+  el.wakeLockWarning.hidden = !(state.status === "running" && !("wakeLock" in navigator));
 }
 
 document.addEventListener("visibilitychange", () => {
@@ -140,11 +145,15 @@ function loadState() {
   }
 }
 
+// Surfaced via el.saveWarning rather than thrown — saveState() runs after
+// every single action (a ruck tap, a phase toggle), so anything louder than
+// a persistent-but-quiet banner would be disruptive mid-session.
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    el.saveWarning.hidden = true;
   } catch {
-    /* storage unavailable, non-fatal */
+    el.saveWarning.hidden = false;
   }
 }
 
@@ -269,15 +278,27 @@ function logEvent(activityId, type) {
   render();
 }
 
-/* Reopen the most recently finished activity so it can keep being timed —
-   e.g. it was marked done, then the coach decided to run one more rep. Only
-   valid for the last activity in the session while nothing else is running,
-   since the single-slot runningActivityId model can't represent two
-   activities in progress at once. */
+/* Reopen the most recently finished period so it can keep being timed —
+   e.g. it was marked done, then the coach decided to run one more rep, or
+   "Finalizar período"/"Finalizar sesión" got tapped by mistake. Only valid
+   for the last period in the session while nothing else is running, since
+   the single-slot runningActivityId model can't represent two periods in
+   progress at once. If the whole session had already been finished, this
+   also un-finishes it (resumes the session clock from its saved baseline,
+   same as any other timestamp-based resume in this app) — that's the only
+   "undo" there is for a session wrapped up too soon; the alternative is
+   fixing the segment's end time by hand in Modo Edición. */
 function reopenLastActivity() {
-  if (state.status !== "running" || state.runningActivityId) return;
+  if (state.status === "idle" || state.runningActivityId) return;
   const activity = state.activities[state.activities.length - 1];
   if (!activity || activity.status !== "finished") return;
+
+  if (state.status === "finished") {
+    state.status = "running";
+    state.endedAt = null;
+    startClock(state.clock, nowIso());
+  }
+
   activity.status = "running";
   activity.endedAt = null;
   const lastSegment = activity.segments[activity.segments.length - 1];
@@ -814,6 +835,7 @@ function buildSessionFromAngles(segments, anchorMs) {
 
 const el = {
   navTabs: Array.from(document.querySelectorAll(".nav-tab")),
+  saveWarning: document.getElementById("save-warning"),
   recoveryBanner: document.getElementById("recovery-banner"),
   recoveryText: document.getElementById("recovery-text"),
   btnRecoveryContinue: document.getElementById("btn-recovery-continue"),
@@ -839,6 +861,7 @@ const el = {
   screenVivo: document.getElementById("screen-vivo"),
   vivoEmptyState: document.getElementById("vivo-empty-state"),
   vivoContent: document.getElementById("vivo-content"),
+  wakeLockWarning: document.getElementById("wake-lock-warning"),
   sessionNameDisplay: document.getElementById("session-name-display"),
   sessionStartTime: document.getElementById("session-start-time"),
   sessionElapsed: document.getElementById("session-elapsed"),
@@ -1112,9 +1135,22 @@ function buildActivityListItem(activity, onResume) {
    "Reanudar") and a read-only copy inside the Pantalla 3 summary — the only
    one of the two that's actually visible (and print-able) once the screen
    split moved Vivo's copy behind a hidden sibling section after finishing. */
+// Reopening while the session is still "running" is low-stakes (nothing
+// else changes). Reopening after "Finalizar sesión" is more consequential —
+// it un-finishes the session and invalidates any CSV/PDF/JSON already
+// exported — so that path alone gets an explicit confirmation.
+function resumeLastActivity() {
+  if (state.status === "finished"
+    && !confirm("¿Reabrir la sesión para seguir cronometrando este período? Si ya exportaste el CSV/PDF/JSON, vas a tener que volver a exportar después.")) {
+    return;
+  }
+  reopenLastActivity();
+  navigateTo("vivo");
+}
+
 function renderFinishedActivities() {
   const finished = state.activities.filter((a) => a.status === "finished");
-  const canResume = state.status === "running" && !state.runningActivityId
+  const canResume = (state.status === "running" || state.status === "finished") && !state.runningActivityId
     && state.activities.length > 0
     && state.activities[state.activities.length - 1].status === "finished";
   const lastActivityId = state.activities.length
@@ -1125,13 +1161,14 @@ function renderFinishedActivities() {
   el.activitiesList.innerHTML = "";
   finished.forEach((activity) => {
     const resumable = canResume && activity.id === lastActivityId;
-    el.activitiesList.appendChild(buildActivityListItem(activity, resumable ? reopenLastActivity : null));
+    el.activitiesList.appendChild(buildActivityListItem(activity, resumable ? resumeLastActivity : null));
   });
 
   el.summaryActivitiesWrap.hidden = finished.length === 0;
   el.summaryActivitiesList.innerHTML = "";
   finished.forEach((activity) => {
-    el.summaryActivitiesList.appendChild(buildActivityListItem(activity, null));
+    const resumable = canResume && activity.id === lastActivityId;
+    el.summaryActivitiesList.appendChild(buildActivityListItem(activity, resumable ? resumeLastActivity : null));
   });
 }
 
