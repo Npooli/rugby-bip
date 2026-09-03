@@ -194,6 +194,22 @@ h1, h2, h3, .value.big, .stat-number {
 .pulse-bip #live-ball-phase { color: var(--bip); }
 .pulse-bop #live-ball-phase { color: var(--bop); }
 
+/* Live duration of the current streak — resets to 0:00 every time the phase
+   toggles. Distinct from the cumulative BIP/BOP totals in .phase-status
+   below the ball: this one answers "how long has *this* stretch gone on
+   for", which is the number a coach glancing at the field actually needs
+   moment to moment. */
+.live-segment-duration {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pulse-bip .live-segment-duration { color: var(--bip); }
+.pulse-bop .live-segment-duration { color: var(--bop); }
+
 .live-ball-sub {
   font-family: var(--font-mono);
   font-size: 11px;

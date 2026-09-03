@@ -819,6 +819,7 @@ const el = {
   liveBallWrap: document.getElementById("live-ball-wrap"),
   liveBallPhase: document.getElementById("live-ball-phase"),
   liveBallSub: document.getElementById("live-ball-sub"),
+  liveSegmentDuration: document.getElementById("live-segment-duration"),
   bipSourceHint: document.getElementById("bip-source-hint"),
   bipSourcePicker: document.getElementById("bip-source-picker"),
   sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
@@ -1399,6 +1400,12 @@ function tick() {
     el.bipBarFill.style.width = `${stats.pct.toFixed(1)}%`;
     el.bipPercent.textContent = `${stats.pct.toFixed(0)}%`;
     el.bipRatio.textContent = formatRatio(stats.ratio);
+
+    // Duration of whichever segment (BIP or BOP) is open right now — not the
+    // cumulative bipTime/bopTime above, which sum every segment of that
+    // phase across the whole period.
+    const currentSegment = active.segments[active.segments.length - 1];
+    el.liveSegmentDuration.textContent = fmtMS(now - Date.parse(currentSegment.startedAt));
   }
 }
 
