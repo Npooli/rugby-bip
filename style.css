@@ -1008,6 +1008,35 @@ main {
   font-weight: 800;
 }
 
+.wcs-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.wcs-filter-row .label {
+  white-space: nowrap;
+}
+
+/* The dropdown itself doesn't mean anything on paper — this text stand-in
+   (hidden on screen, shown only in print) says which period the printed
+   WCS/distribution numbers below it actually reflect. */
+.wcs-filter-print-label {
+  display: none;
+}
+
+#wcs-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-high);
+  color: var(--text);
+  font-size: 14px;
+}
+
 .wcs-stat {
   padding: 14px;
   margin-bottom: 18px;
@@ -1249,8 +1278,15 @@ main {
   .topbar, #screen-inicio, .session-card .big-btn, #new-activity-form,
   #active-activity, .link-btn, .app-footer, .export-row,
   .live-feed-header, .live-feed-list, #activities-list-wrap .act-resume-row,
-  #edit-wrap, .import-section {
+  #edit-wrap, .import-section, .wcs-filter-row {
     display: none !important;
+  }
+
+  .wcs-filter-print-label {
+    display: block !important;
+    font-size: 13px;
+    color: #555 !important;
+    margin: 0 0 10px;
   }
 
   html, body {

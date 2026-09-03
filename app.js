@@ -501,12 +501,15 @@ const BIP_STREAK_BUCKETS = [
   { label: "+120\"", min: 120, max: Infinity }
 ];
 
-/* Worst Case Scenario: the single longest uninterrupted BIP streak in the
-   session, plus a histogram of every BIP streak's length — how many short
-   bursts vs sustained periods of real play the team actually produced. */
-function bipStreakStats() {
+/* Worst Case Scenario: the single longest uninterrupted BIP streak, plus a
+   histogram of every BIP streak's length — how many short bursts vs
+   sustained periods of real play the team actually produced. `filterId`
+   narrows this to one period ("all" or omitted = whole session), for the
+   Pantalla 3 WCS filter. */
+function bipStreakStats(filterId) {
   const streaks = [];
   state.activities.forEach((activity) => {
+    if (filterId && filterId !== "all" && activity.id !== filterId) return;
     activity.segments.forEach((seg) => {
       if (seg.phase !== "BIP" || !seg.endedAt) return;
       const durationS = (Date.parse(seg.endedAt) - Date.parse(seg.startedAt)) / 1000;
@@ -523,6 +526,41 @@ function bipStreakStats() {
   });
 
   return { buckets, longest, total: streaks.length };
+}
+
+// Which period the WCS/distribution section is currently filtered to —
+// "all" or a period id. Lives outside `state` (it's a view preference, not
+// session data) and outside render() itself, so picking a period survives
+// an unrelated re-render (e.g. saving an edit) instead of snapping back to
+// "Todos los períodos" every time.
+let wcsFilterActivityId = "all";
+
+function renderWcsFilterOptions() {
+  const finished = state.activities.filter((a) => a.status === "finished");
+  if (wcsFilterActivityId !== "all" && !finished.some((a) => a.id === wcsFilterActivityId)) {
+    wcsFilterActivityId = "all";
+  }
+  el.wcsFilter.innerHTML = ['<option value="all">Todos los períodos</option>']
+    .concat(finished.map((a) => `<option value="${a.id}">${escapeHtml(a.name)}</option>`))
+    .join("");
+  el.wcsFilter.value = wcsFilterActivityId;
+}
+
+function renderWcs() {
+  const selectedLabel = el.wcsFilter.options[el.wcsFilter.selectedIndex]?.textContent || "Todos los períodos";
+  el.wcsFilterPrintLabel.textContent = `Mostrando: ${selectedLabel}`;
+
+  const { buckets, longest } = bipStreakStats(wcsFilterActivityId);
+  el.wcsStat.innerHTML = longest
+    ? `<span class="wcs-duration">${fmtHMS(longest.durationS * 1000)}</span> — ${fmtClockTime(longest.startedAt)} a ${fmtClockTime(longest.endedAt)} · ${escapeHtml(longest.activityName)}`
+    : "Sin datos";
+  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  el.bipDistribution.innerHTML = buckets.map((b) => `
+    <div class="dist-row">
+      <span class="dist-label">${b.label}</span>
+      <div class="dist-bar"><div class="dist-bar-fill" style="width:${((b.count / maxCount) * 100).toFixed(1)}%"></div></div>
+      <span class="dist-count">${b.count}</span>
+    </div>`).join("");
 }
 
 /* ---------- CSV export ---------- */
@@ -872,6 +910,8 @@ const el = {
   sumRuckPerBipMin: document.getElementById("sum-ruck-per-bip-min"),
   sumKickPerMin: document.getElementById("sum-kick-per-min"),
   sumKickPerBipMin: document.getElementById("sum-kick-per-bip-min"),
+  wcsFilter: document.getElementById("wcs-filter"),
+  wcsFilterPrintLabel: document.getElementById("wcs-filter-print-label"),
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
   btnExportCsv: document.getElementById("btn-export-csv"),
@@ -992,17 +1032,8 @@ function render() {
     el.sumKickPerMin.textContent = perMin(eventCounts.KICK, sessionMin);
     el.sumKickPerBipMin.textContent = perMin(eventCounts.KICK, bipMin);
 
-    const { buckets, longest } = bipStreakStats();
-    el.wcsStat.innerHTML = longest
-      ? `<span class="wcs-duration">${fmtHMS(longest.durationS * 1000)}</span> — ${fmtClockTime(longest.startedAt)} a ${fmtClockTime(longest.endedAt)} · ${escapeHtml(longest.activityName)}`
-      : "Sin datos";
-    const maxCount = Math.max(1, ...buckets.map((b) => b.count));
-    el.bipDistribution.innerHTML = buckets.map((b) => `
-      <div class="dist-row">
-        <span class="dist-label">${b.label}</span>
-        <div class="dist-bar"><div class="dist-bar-fill" style="width:${((b.count / maxCount) * 100).toFixed(1)}%"></div></div>
-        <span class="dist-count">${b.count}</span>
-      </div>`).join("");
+    renderWcsFilterOptions();
+    renderWcs();
   }
 
   tick(); // paint live numbers immediately
@@ -1530,6 +1561,10 @@ el.btnUndoLast.addEventListener("click", () => {
   if (!active) return;
   const items = buildFeedItems(active);
   if (items[0] && items[0].canUndo) undoFeedItem(active, items[0].refType, items[0].refId);
+});
+el.wcsFilter.addEventListener("change", () => {
+  wcsFilterActivityId = el.wcsFilter.value;
+  renderWcs();
 });
 el.btnExportCsv.addEventListener("click", exportCsv);
 el.btnExportJson.addEventListener("click", exportSessionJson);
