@@ -530,11 +530,13 @@ function bipStreakStats() {
 function buildCsv() {
   const headers = [
     "session_id", "session_name", "session_start_time", "session_end_time", "session_duration_s",
+    "session_bip_total_s", "session_bop_total_s",
     "activity_name", "activity_start_time", "activity_end_time", "activity_duration_s",
     "bip_duration_s", "bop_duration_s", "bip_percent", "work_rest_ratio",
     "ruck_count", "kick_event_count"
   ];
   const sessionDurationS = Math.round(clockElapsedMs(state.clock) / 1000);
+  const bipAgg = sessionBipStats();
   const rows = state.activities.map((activity) => {
     const stats = activityStats(activity);
     return [
@@ -543,6 +545,8 @@ function buildCsv() {
       state.startedAt || "",
       state.endedAt || "",
       sessionDurationS,
+      Math.round(bipAgg.bipMs / 1000),
+      Math.round(bipAgg.bopMs / 1000),
       csvEscape(activity.name),
       activity.startedAt || "",
       activity.endedAt || "",
@@ -852,6 +856,8 @@ const el = {
   summaryEndTime: document.getElementById("summary-end-time"),
   summaryActivitiesWrap: document.getElementById("summary-activities-wrap"),
   summaryActivitiesList: document.getElementById("summary-activities-list"),
+  sumBipTotal: document.getElementById("sum-bip-total"),
+  sumBopTotal: document.getElementById("sum-bop-total"),
   sumBipPercent: document.getElementById("sum-bip-percent"),
   sumBipRatio: document.getElementById("sum-bip-ratio"),
   bipPercentNote: document.getElementById("bip-percent-note"),
@@ -961,6 +967,8 @@ function render() {
     el.summaryEndTime.textContent = state.endedAt ? fmtClockTime(state.endedAt) : "--:--:--";
 
     const bipAgg = sessionBipStats();
+    el.sumBipTotal.textContent = bipAgg.totalMs > 0 ? fmtHMS(bipAgg.bipMs) : "—";
+    el.sumBopTotal.textContent = bipAgg.totalMs > 0 ? fmtHMS(bipAgg.bopMs) : "—";
     el.sumBipPercent.textContent = bipAgg.totalMs > 0 ? `${bipAgg.pct.toFixed(0)}%` : "—";
     el.sumBipRatio.textContent = bipAgg.totalMs > 0 ? formatRatio(bipAgg.ratio) : "—";
     el.bipPercentNote.textContent = bipAgg.totalCount > bipAgg.trackedCount
