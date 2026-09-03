@@ -13,7 +13,6 @@
      appears on. */
   --muted: #b8b8c2;
   --accent: #ffc640;
-  --data-gold: #c29b40;
   --danger: #ef4444;
   /* Neutral primary actions (Iniciar sesión/actividad, Importar XML,
      exportar, Ruck) live here instead of on --accent, which used to do
@@ -359,8 +358,6 @@ main {
 
 .card {
   background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 20px;
@@ -380,8 +377,6 @@ main {
 
 .session-card {
   background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 20px 18px;
@@ -819,9 +814,9 @@ main {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
-  border: 2px solid var(--bop);
+  border: 2px solid var(--action);
   background: transparent;
-  color: var(--bop);
+  color: var(--action-bright);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -1038,7 +1033,7 @@ main {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--panel-border);
-  background: var(--panel-high);
+  background: var(--bg);
   color: var(--text);
   font-size: 14px;
 }
@@ -1308,7 +1303,6 @@ main {
     color: #111;
     border: 1px solid #ccc;
     box-shadow: none;
-    backdrop-filter: none;
     break-inside: avoid;
   }
 
