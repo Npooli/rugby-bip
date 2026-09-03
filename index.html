@@ -195,8 +195,15 @@
           </div>
         </div>
 
-        <!-- Secundario: historial de lo que pasó. Crece debajo de los
-             controles, con su propio scroll interno acotado. -->
+        <!-- Cuánto duró cada secuencia y cada pausa, en orden. Crece con la
+             actividad — a diferencia del Live Feed, acá conviene ver todo. -->
+        <div class="sequence-list-header">
+          <h3 class="label">Secuencias</h3>
+        </div>
+        <ul id="sequence-list" class="sequence-list"></ul>
+
+        <!-- Secundario: solo lo más reciente, para deshacer un error. Lo
+             de más atrás ya quedó reflejado en Secuencias, arriba. -->
         <div class="live-feed-header">
           <h3 class="label">Live Feed</h3>
           <span class="live-feed-dot"></span>
@@ -304,6 +311,9 @@
         <p id="wcs-filter-print-label" class="wcs-filter-print-label"></p>
         <div id="wcs-stat" class="wcs-stat">Sin datos</div>
         <div id="bip-distribution" class="bip-distribution"></div>
+
+        <p class="sequence-list-subhead">Detalle de secuencias y pausas</p>
+        <ul id="summary-sequence-list" class="sequence-list"></ul>
 
         <div class="export-row">
           <button id="btn-export-csv" class="big-btn export">Descargar CSV</button>

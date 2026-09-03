@@ -549,6 +549,55 @@ function bipStreakStats(filterId) {
   return { buckets, longest, total: streaks.length };
 }
 
+/* Every CLOSED segment (BIP or BOP) in order, each with its own duration —
+   "Secuencia 1: 0:45, Pausa: 0:12, Secuencia 2: 1:02…", the story of a
+   period's rhythm at a glance, instead of making the coach do the mental
+   subtraction between two timestamps in the Live Feed. The currently-open
+   segment isn't included here — that one's already shown live via
+   #live-segment-duration. `filterId` narrows to one period ("all" or
+   omitted = every finished period, oldest to newest). */
+function buildSequenceList(filterId) {
+  const items = [];
+  state.activities.forEach((activity) => {
+    if (filterId && filterId !== "all" && activity.id !== filterId) return;
+    activity.segments.forEach((seg) => {
+      if (!seg.endedAt) return;
+      items.push({
+        phase: seg.phase,
+        source: seg.source,
+        durationMs: Date.parse(seg.endedAt) - Date.parse(seg.startedAt),
+        startedAt: seg.startedAt,
+        activityName: activity.name
+      });
+    });
+  });
+  items.sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  return items;
+}
+
+function renderSequenceList(listEl, items, opts = {}) {
+  if (!items.length) {
+    listEl.innerHTML = `<li class="seq-empty">Todavía no hay tramos completados</li>`;
+    return;
+  }
+  let seqNum = 0;
+  listEl.innerHTML = items.map((item) => {
+    const activityNote = opts.showActivityName ? ` · ${escapeHtml(item.activityName)}` : "";
+    if (item.phase === "BIP") {
+      seqNum++;
+      const sourceLabel = SOURCE_LABELS[item.source] || "origen desconocido";
+      return `<li class="seq-item seq-bip">
+        <span class="seq-label">Secuencia ${seqNum} — ${escapeHtml(sourceLabel)}${activityNote}</span>
+        <span class="seq-duration">${fmtMS(item.durationMs)}</span>
+      </li>`;
+    }
+    return `<li class="seq-item seq-bop">
+      <span class="seq-label">Pausa${activityNote}</span>
+      <span class="seq-duration">${fmtMS(item.durationMs)}</span>
+    </li>`;
+  }).join("");
+}
+
 // Which period the WCS/distribution section is currently filtered to —
 // "all" or a period id. Lives outside `state` (it's a view preference, not
 // session data) and outside render() itself, so picking a period survives
@@ -582,6 +631,10 @@ function renderWcs() {
       <div class="dist-bar"><div class="dist-bar-fill" style="width:${((b.count / maxCount) * 100).toFixed(1)}%"></div></div>
       <span class="dist-count">${b.count}</span>
     </div>`).join("");
+
+  renderSequenceList(el.summarySequenceList, buildSequenceList(wcsFilterActivityId), {
+    showActivityName: wcsFilterActivityId === "all"
+  });
 }
 
 /* ---------- CSV export ---------- */
@@ -896,6 +949,7 @@ const el = {
   ruckCount: document.getElementById("ruck-count"),
   btnLogKick: document.getElementById("btn-log-kick"),
   kickCount: document.getElementById("kick-count"),
+  sequenceList: document.getElementById("sequence-list"),
   liveFeedList: document.getElementById("live-feed-list"),
   btnUndoLast: document.getElementById("btn-undo-last"),
   btnFinishActivity: document.getElementById("btn-finish-activity"),
@@ -937,6 +991,7 @@ const el = {
   wcsFilterPrintLabel: document.getElementById("wcs-filter-print-label"),
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
+  summarySequenceList: document.getElementById("summary-sequence-list"),
   btnExportCsv: document.getElementById("btn-export-csv"),
   btnExportJson: document.getElementById("btn-export-json"),
   btnExportPdf: document.getElementById("btn-export-pdf"),
@@ -1015,6 +1070,7 @@ function render() {
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
     el.kickCount.textContent = active.events.filter((e) => e.type === "KICK").length;
+    renderSequenceList(el.sequenceList, buildSequenceList(active.id));
     renderLiveFeed(active);
   }
 
@@ -1087,11 +1143,15 @@ function buildFeedItems(activity) {
   return items;
 }
 
-/* Grows with the page instead of being capped in its own scroll box — that
-   cap existed to keep the feed from crowding the old sticky-bottom control
-   panel, which is gone now, so there's no reason left to hide older items. */
+// Capped back down on request: with the new Secuencias list covering "what
+// happened and how long it lasted", the feed's job narrows to just "undo a
+// recent mistake" — older entries don't need to stay visible for that, and
+// an unbounded list was starting to feel like it'd grow forever over a
+// long period.
+const FEED_MAX_ITEMS = 4;
+
 function renderLiveFeed(activity) {
-  const items = buildFeedItems(activity);
+  const items = buildFeedItems(activity).slice(0, FEED_MAX_ITEMS);
 
   el.btnUndoLast.disabled = !(items[0] && items[0].canUndo);
 
