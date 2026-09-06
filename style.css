@@ -616,6 +616,80 @@ main {
   padding: 6px 2px;
 }
 
+.seq-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.seq-outcome {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.seq-outcome-positive { background: rgba(74, 222, 128, 0.18); color: var(--bip); }
+.seq-outcome-negative { background: rgba(239, 68, 68, 0.18); color: var(--danger); }
+.seq-outcome-neutral { background: var(--panel-border); color: var(--muted); }
+
+/* Non-blocking prompts offered right after a ruck or a sequence ends — a
+   quiet suggestion, not a gate. Skipping them (tapping anything else) is
+   always valid; they just disappear. */
+.quick-tag-prompt {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-high);
+  border: 1px solid var(--panel-border);
+}
+
+.quick-tag-prompt .label {
+  display: block;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.quick-tag-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-tag-buttons-wrap {
+  flex-wrap: wrap;
+}
+
+.ruck-speed-btn,
+.outcome-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1.5px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ruck-speed-btn {
+  border-color: var(--action);
+  color: var(--action-bright);
+}
+
+.ruck-speed-btn:active { background: rgba(52, 87, 213, 0.15); }
+
+.outcome-btn.outcome-positive { border-color: var(--bip); color: var(--bip); }
+.outcome-btn.outcome-negative { border-color: var(--danger); color: var(--danger); }
+.outcome-btn.outcome-neutral { border-color: var(--panel-border-strong); color: var(--muted); }
+
+.outcome-btn.outcome-positive:active { background: rgba(74, 222, 128, 0.15); }
+.outcome-btn.outcome-negative:active { background: rgba(239, 68, 68, 0.15); }
+.outcome-btn.outcome-neutral:active { background: var(--panel-high); }
+
 .live-feed-header {
   display: flex;
   align-items: center;
@@ -1009,6 +1083,15 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.edit-outcome-select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
 .edit-events {
   display: flex;
   flex-direction: column;
@@ -1024,6 +1107,29 @@ main {
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+.edit-ruck-speed {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.edit-ruck-speed-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.edit-ruck-speed-btn.active {
+  border-color: var(--action);
+  color: var(--action-ink);
+  background: var(--action);
 }
 
 .summary-subhead {
@@ -1376,6 +1482,11 @@ main {
 
   .seq-duration {
     color: #555 !important;
+  }
+
+  .seq-outcome {
+    background: #eee !important;
+    color: #111 !important;
   }
 
   .timeline-seg.bip { background: #0ca30c; }

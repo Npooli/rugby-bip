@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "cronosesion.session.v1";
-const SCHEMA_VERSION = 7; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
+const SCHEMA_VERSION = 8; // bump whenever the saved-state shape changes; old saves are discarded rather than migrated
 
 const SOURCE_LABELS = {
   scrum: "Scrum",
@@ -278,6 +278,70 @@ function logEvent(activityId, type) {
   render();
 }
 
+// speed: "fast" (<3") | "slow" (>3") | null/undefined to clear.
+function setRuckSpeed(activityId, eventId, speed) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity) return;
+  const ev = activity.events.find((e) => e.id === eventId);
+  if (!ev || ev.type !== "RUCK") return;
+  if (speed) ev.speed = speed;
+  else delete ev.speed;
+  saveState();
+  render();
+}
+
+/* The ruck-speed prompt is optional and never blocking: it only ever offers
+   to tag the single most recent thing that happened in the activity (reusing
+   the same newest-first ordering as the Live Feed), and only while that
+   thing is still an unclassified ruck. Tap anything else — another ruck, a
+   kick, a phase toggle — and this naturally stops matching, so the prompt
+   for the previous ruck just disappears instead of demanding an answer. A
+   ruck skipped this way isn't lost, just left for Modo Edición later. */
+function pendingRuckToClassify(activity) {
+  if (!activity) return null;
+  const mostRecent = buildFeedItems(activity)[0];
+  if (!mostRecent || mostRecent.refType !== "event") return null;
+  const ev = activity.events.find((e) => e.id === mostRecent.refId);
+  return ev && ev.type === "RUCK" && !ev.speed ? ev : null;
+}
+
+/* How a phase of play ended, for correlating sequence length with result —
+   a short sequence that ends in a Try reads very differently from a long
+   one that ends in an unforced error. "valence" only drives styling/quick
+   reading; it isn't stored, just used to color the tag. */
+const SEQUENCE_OUTCOMES = {
+  try: { label: "Try", valence: "positive" },
+  penal_favor: { label: "Penal a favor", valence: "positive" },
+  error: { label: "Error no forzado", valence: "negative" },
+  penal_contra: { label: "Penal en contra", valence: "negative" },
+  otro: { label: "Otro", valence: "neutral" }
+};
+
+// outcome: one of SEQUENCE_OUTCOMES' keys, or null/undefined to clear.
+function setSequenceOutcome(activityId, segmentId, outcome) {
+  const activity = state.activities.find((a) => a.id === activityId);
+  if (!activity) return;
+  const seg = activity.segments.find((s) => s.id === segmentId);
+  if (!seg || seg.phase !== "BIP") return;
+  if (outcome) seg.outcome = outcome;
+  else delete seg.outcome;
+  saveState();
+  render();
+}
+
+/* Same non-blocking philosophy as the ruck prompt, but "most recent feed
+   item" doesn't work here: the instant a sequence ends, the new (open) BOP
+   segment becomes the most recent thing, not the BIP segment that just
+   closed. Instead this looks at *the segment right before the current one*
+   — valid only while still in that same BOP stretch (activity.phase still
+   "BOP"); starting the next sequence flips the phase back to "BIP" and the
+   prompt for the previous one disappears on its own, classified or not. */
+function pendingOutcomeToClassify(activity) {
+  if (!activity || activity.phase !== "BOP") return null;
+  const seg = activity.segments[activity.segments.length - 2];
+  return seg && seg.phase === "BIP" && seg.endedAt && !seg.outcome ? seg : null;
+}
+
 /* Reopen the most recently finished period so it can keep being timed —
    e.g. it was marked done, then the coach decided to run one more rep, or
    "Finalizar período"/"Finalizar sesión" got tapped by mistake. Only valid
@@ -477,15 +541,33 @@ function bipOnlyLabel(ratio) {
 function sessionAggregates() {
   const sourceCounts = { scrum: 0, lineout: 0, open: 0, kick: 0 };
   const eventCounts = { RUCK: 0, KICK: 0 };
+  const ruckSpeedCounts = { fast: 0, slow: 0 };
   state.activities.forEach((activity) => {
     activity.segments.forEach((seg) => {
       if (seg.phase === "BIP" && seg.source in sourceCounts) sourceCounts[seg.source]++;
     });
     activity.events.forEach((ev) => {
       if (ev.type in eventCounts) eventCounts[ev.type]++;
+      if (ev.type === "RUCK" && ev.speed in ruckSpeedCounts) ruckSpeedCounts[ev.speed]++;
     });
   });
-  return { sourceCounts, eventCounts };
+  return { sourceCounts, eventCounts, ruckSpeedCounts };
+}
+
+// Same period filter as the WCS/Secuencias section, since "how did short
+// vs. long sequences end" only makes sense read together with the rhythm
+// detail right above it.
+function sequenceOutcomeStats(filterId) {
+  const counts = { try: 0, penal_favor: 0, error: 0, penal_contra: 0, otro: 0, sinClasificar: 0 };
+  state.activities.forEach((activity) => {
+    if (filterId && filterId !== "all" && activity.id !== filterId) return;
+    activity.segments.forEach((seg) => {
+      if (seg.phase !== "BIP" || !seg.endedAt) return;
+      if (seg.outcome in counts) counts[seg.outcome]++;
+      else counts.sinClasificar++;
+    });
+  });
+  return counts;
 }
 
 /* Session-wide "% Juego real": bipMs / (bipMs + bopMs), summed only across
@@ -565,6 +647,7 @@ function buildSequenceList(filterId) {
       items.push({
         phase: seg.phase,
         source: seg.source,
+        outcome: seg.outcome,
         durationMs: Date.parse(seg.endedAt) - Date.parse(seg.startedAt),
         startedAt: seg.startedAt,
         activityName: activity.name
@@ -586,14 +669,16 @@ function renderSequenceList(listEl, items, opts = {}) {
     if (item.phase === "BIP") {
       seqNum++;
       const sourceLabel = SOURCE_LABELS[item.source] || "origen desconocido";
+      const outcome = item.outcome && SEQUENCE_OUTCOMES[item.outcome];
+      const outcomeSpan = outcome ? `<span class="seq-outcome seq-outcome-${outcome.valence}">${escapeHtml(outcome.label)}</span>` : "";
       return `<li class="seq-item seq-bip">
         <span class="seq-label">Secuencia ${seqNum} — ${escapeHtml(sourceLabel)}${activityNote}</span>
-        <span class="seq-duration">${fmtMS(item.durationMs)}</span>
+        <span class="seq-meta">${outcomeSpan}<span class="seq-duration">${fmtMS(item.durationMs)}</span></span>
       </li>`;
     }
     return `<li class="seq-item seq-bop">
       <span class="seq-label">Pausa${activityNote}</span>
-      <span class="seq-duration">${fmtMS(item.durationMs)}</span>
+      <span class="seq-meta"><span class="seq-duration">${fmtMS(item.durationMs)}</span></span>
     </li>`;
   }).join("");
 }
@@ -632,6 +717,13 @@ function renderWcs() {
       <span class="dist-count">${b.count}</span>
     </div>`).join("");
 
+  const outcomeCounts = sequenceOutcomeStats(wcsFilterActivityId);
+  el.outcomeStats.innerHTML = Object.entries(SEQUENCE_OUTCOMES).map(([key, o]) => `
+    <div><span class="label">${escapeHtml(o.label)}</span><span class="value">${outcomeCounts[key]}</span></div>
+  `).join("") + `
+    <div><span class="label">Sin resultado</span><span class="value">${outcomeCounts.sinClasificar}</span></div>
+  `;
+
   renderSequenceList(el.summarySequenceList, buildSequenceList(wcsFilterActivityId), {
     showActivityName: wcsFilterActivityId === "all"
   });
@@ -645,7 +737,8 @@ function buildCsv() {
     "session_bip_total_s", "session_bop_total_s",
     "activity_name", "activity_start_time", "activity_end_time", "activity_duration_s",
     "bip_duration_s", "bop_duration_s", "bip_percent", "work_rest_ratio",
-    "ruck_count", "kick_event_count"
+    "ruck_count", "kick_event_count", "ruck_fast_count", "ruck_slow_count",
+    "seq_try_count", "seq_penal_favor_count", "seq_error_count", "seq_penal_contra_count", "seq_otro_count"
   ];
   const sessionDurationS = Math.round(clockElapsedMs(state.clock) / 1000);
   const bipAgg = sessionBipStats();
@@ -668,7 +761,14 @@ function buildCsv() {
       stats.tracked ? stats.pct.toFixed(1) : "",
       stats.tracked && Number.isFinite(stats.ratio) ? stats.ratio.toFixed(2) : "",
       activity.events.filter((e) => e.type === "RUCK").length,
-      activity.events.filter((e) => e.type === "KICK").length
+      activity.events.filter((e) => e.type === "KICK").length,
+      activity.events.filter((e) => e.type === "RUCK" && e.speed === "fast").length,
+      activity.events.filter((e) => e.type === "RUCK" && e.speed === "slow").length,
+      activity.segments.filter((s) => s.outcome === "try").length,
+      activity.segments.filter((s) => s.outcome === "penal_favor").length,
+      activity.segments.filter((s) => s.outcome === "error").length,
+      activity.segments.filter((s) => s.outcome === "penal_contra").length,
+      activity.segments.filter((s) => s.outcome === "otro").length
     ].join(",");
   });
   return [headers.join(","), ...rows].join("\n");
@@ -784,12 +884,14 @@ function normalizeImportedSession(parsed) {
       phase: s.phase,
       source: s.source,
       startedAt: s.startedAt,
-      endedAt: s.endedAt
+      endedAt: s.endedAt,
+      ...(s.outcome ? { outcome: s.outcome } : {})
     })),
     events: (a.events || []).map((e) => ({
       id: e.id || uid(),
       type: e.type,
-      at: e.at
+      at: e.at,
+      ...(e.speed ? { speed: e.speed } : {})
     }))
   }));
   return {
@@ -934,6 +1036,8 @@ const el = {
   liveBallPhase: document.getElementById("live-ball-phase"),
   liveBallSub: document.getElementById("live-ball-sub"),
   liveSegmentDuration: document.getElementById("live-segment-duration"),
+  sequenceOutcomePrompt: document.getElementById("sequence-outcome-prompt"),
+  outcomeButtons: Array.from(document.querySelectorAll(".outcome-btn")),
   bipSourceHint: document.getElementById("bip-source-hint"),
   bipSourcePicker: document.getElementById("bip-source-picker"),
   sourceButtons: Array.from(document.querySelectorAll(".source-btn")),
@@ -949,6 +1053,9 @@ const el = {
   ruckCount: document.getElementById("ruck-count"),
   btnLogKick: document.getElementById("btn-log-kick"),
   kickCount: document.getElementById("kick-count"),
+  ruckSpeedPrompt: document.getElementById("ruck-speed-prompt"),
+  btnRuckFast: document.getElementById("btn-ruck-fast"),
+  btnRuckSlow: document.getElementById("btn-ruck-slow"),
   sequenceList: document.getElementById("sequence-list"),
   liveFeedList: document.getElementById("live-feed-list"),
   btnUndoLast: document.getElementById("btn-undo-last"),
@@ -983,6 +1090,8 @@ const el = {
   sumKickRestart: document.getElementById("sum-kick-restart"),
   sumRuck: document.getElementById("sum-ruck"),
   sumKickEvent: document.getElementById("sum-kick-event"),
+  sumRuckFast: document.getElementById("sum-ruck-fast"),
+  sumRuckSlow: document.getElementById("sum-ruck-slow"),
   sumRuckPerMin: document.getElementById("sum-ruck-per-min"),
   sumRuckPerBipMin: document.getElementById("sum-ruck-per-bip-min"),
   sumKickPerMin: document.getElementById("sum-kick-per-min"),
@@ -991,6 +1100,7 @@ const el = {
   wcsFilterPrintLabel: document.getElementById("wcs-filter-print-label"),
   wcsStat: document.getElementById("wcs-stat"),
   bipDistribution: document.getElementById("bip-distribution"),
+  outcomeStats: document.getElementById("outcome-stats"),
   summarySequenceList: document.getElementById("summary-sequence-list"),
   btnExportCsv: document.getElementById("btn-export-csv"),
   btnExportJson: document.getElementById("btn-export-json"),
@@ -1053,6 +1163,7 @@ function render() {
     el.liveBallWrap.classList.toggle("pulse-bop", active.phase === "BOP");
 
     const inPlay = active.phase === "BIP";
+    el.sequenceOutcomePrompt.hidden = !pendingOutcomeToClassify(active);
     el.bipSourceHint.hidden = inPlay;
     el.bipSourcePicker.hidden = inPlay;
     el.bipActiveInfo.hidden = !inPlay;
@@ -1070,6 +1181,7 @@ function render() {
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
     el.kickCount.textContent = active.events.filter((e) => e.type === "KICK").length;
+    el.ruckSpeedPrompt.hidden = !pendingRuckToClassify(active);
     renderSequenceList(el.sequenceList, buildSequenceList(active.id));
     renderLiveFeed(active);
   }
@@ -1095,13 +1207,15 @@ function render() {
       ? `Calculado sobre ${bipAgg.trackedCount} de ${bipAgg.totalCount} períodos (los que midieron BIP). No incluye el tiempo de los períodos sin medir.`
       : `Calculado sobre los ${bipAgg.trackedCount} períodos de la sesión.`;
 
-    const { sourceCounts, eventCounts } = sessionAggregates();
+    const { sourceCounts, eventCounts, ruckSpeedCounts } = sessionAggregates();
     el.sumScrum.textContent = sourceCounts.scrum;
     el.sumLineout.textContent = sourceCounts.lineout;
     el.sumOpen.textContent = sourceCounts.open;
     el.sumKickRestart.textContent = sourceCounts.kick;
     el.sumRuck.textContent = eventCounts.RUCK;
     el.sumKickEvent.textContent = eventCounts.KICK;
+    el.sumRuckFast.textContent = ruckSpeedCounts.fast;
+    el.sumRuckSlow.textContent = ruckSpeedCounts.slow;
 
     const sessionMin = clockElapsedMs(state.clock) / 60000;
     const bipMin = bipAgg.bipMs / 60000;
@@ -1336,7 +1450,19 @@ function renderEditPanel() {
         });
       }
 
-      row.append(phaseSpan, startInput, endInput, saveBtn, deleteBtn);
+      if (seg.phase === "BIP") {
+        const outcomeSelect = document.createElement("select");
+        outcomeSelect.className = "edit-outcome-select";
+        outcomeSelect.innerHTML = `<option value="">Sin resultado</option>` +
+          Object.entries(SEQUENCE_OUTCOMES).map(([key, o]) => `<option value="${key}">${escapeHtml(o.label)}</option>`).join("");
+        outcomeSelect.value = seg.outcome || "";
+        outcomeSelect.addEventListener("change", () => {
+          setSequenceOutcome(activity.id, seg.id, outcomeSelect.value || null);
+        });
+        row.append(phaseSpan, startInput, endInput, outcomeSelect, saveBtn, deleteBtn);
+      } else {
+        row.append(phaseSpan, startInput, endInput, saveBtn, deleteBtn);
+      }
       segWrap.appendChild(row);
     });
     li.appendChild(segWrap);
@@ -1349,12 +1475,30 @@ function renderEditPanel() {
         row.className = "edit-event-row";
         const label = document.createElement("span");
         label.textContent = `${ev.type === "RUCK" ? "Ruck" : "Patada"} — ${fmtClockTime(ev.at)}`;
+        row.appendChild(label);
+
+        if (ev.type === "RUCK") {
+          const speedRow = document.createElement("div");
+          speedRow.className = "edit-ruck-speed";
+          [["fast", "<3″"], ["slow", ">3″"]].forEach(([speedVal, speedLabel]) => {
+            const speedBtn = document.createElement("button");
+            speedBtn.type = "button";
+            speedBtn.textContent = speedLabel;
+            speedBtn.className = "edit-ruck-speed-btn" + (ev.speed === speedVal ? " active" : "");
+            speedBtn.addEventListener("click", () => {
+              setRuckSpeed(activity.id, ev.id, ev.speed === speedVal ? null : speedVal);
+            });
+            speedRow.appendChild(speedBtn);
+          });
+          row.appendChild(speedRow);
+        }
+
         const delBtn = document.createElement("button");
         delBtn.type = "button";
         delBtn.className = "edit-event-delete-btn";
         delBtn.textContent = "Borrar";
         delBtn.addEventListener("click", () => undoFeedItem(activity, "event", ev.id));
-        row.append(label, delBtn);
+        row.appendChild(delBtn);
         eventsWrap.appendChild(row);
       });
       li.appendChild(eventsWrap);
@@ -1634,6 +1778,13 @@ el.btnEndBip.addEventListener("click", () => {
   const active = currentActivity();
   if (active) endBip(active.id);
 });
+el.outcomeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const active = currentActivity();
+    const seg = active && pendingOutcomeToClassify(active);
+    if (seg) setSequenceOutcome(active.id, seg.id, btn.dataset.outcome);
+  });
+});
 el.btnLogRuck.addEventListener("click", () => {
   const active = currentActivity();
   if (active) logEvent(active.id, "RUCK");
@@ -1641,6 +1792,16 @@ el.btnLogRuck.addEventListener("click", () => {
 el.btnLogKick.addEventListener("click", () => {
   const active = currentActivity();
   if (active) logEvent(active.id, "KICK");
+});
+el.btnRuckFast.addEventListener("click", () => {
+  const active = currentActivity();
+  const ev = active && pendingRuckToClassify(active);
+  if (ev) setRuckSpeed(active.id, ev.id, "fast");
+});
+el.btnRuckSlow.addEventListener("click", () => {
+  const active = currentActivity();
+  const ev = active && pendingRuckToClassify(active);
+  if (ev) setRuckSpeed(active.id, ev.id, "slow");
 });
 el.btnFinishActivity.addEventListener("click", () => {
   const active = currentActivity();

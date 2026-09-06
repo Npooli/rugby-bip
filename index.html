@@ -159,6 +159,20 @@
 
         <!-- Control de origen: lo que se toca para arrancar/cortar cada tramo. -->
         <div id="live-controls-zone" class="live-controls-zone">
+          <!-- Opcional, nunca bloquea: clasificar cómo terminó la secuencia
+               que se acaba de cortar. Desaparece sola en cuanto arranca la
+               siguiente, clasificada o no. -->
+          <div id="sequence-outcome-prompt" class="quick-tag-prompt" hidden>
+            <span class="label">¿Cómo terminó la secuencia anterior?</span>
+            <div class="quick-tag-buttons quick-tag-buttons-wrap">
+              <button type="button" class="outcome-btn outcome-positive" data-outcome="try">Try</button>
+              <button type="button" class="outcome-btn outcome-positive" data-outcome="penal_favor">Penal a favor</button>
+              <button type="button" class="outcome-btn outcome-negative" data-outcome="error">Error no forzado</button>
+              <button type="button" class="outcome-btn outcome-negative" data-outcome="penal_contra">Penal en contra</button>
+              <button type="button" class="outcome-btn outcome-neutral" data-outcome="otro">Otro</button>
+            </div>
+          </div>
+
           <!-- Visible cuando está en BOP: elegir de dónde arranca el juego -->
           <p id="bip-source-hint" class="label source-hint">Tocá el origen para arrancar el reloj</p>
           <div id="bip-source-picker" class="source-grid">
@@ -192,6 +206,17 @@
               <span class="tag-btn-label">KICK</span>
               <span id="kick-count" class="tag-count">0</span>
             </button>
+          </div>
+
+          <!-- Opcional, nunca bloquea: clasificar el ruck que se acaba de
+               tocar. Tocar RUCK de nuevo (u otra cosa) lo deja sin clasificar
+               y pasa a ofrecer el nuevo. -->
+          <div id="ruck-speed-prompt" class="quick-tag-prompt" hidden>
+            <span class="label">¿Ruck rápido o lento?</span>
+            <div class="quick-tag-buttons">
+              <button type="button" id="btn-ruck-fast" class="ruck-speed-btn">&lt;3″</button>
+              <button type="button" id="btn-ruck-slow" class="ruck-speed-btn">&gt;3″</button>
+            </div>
           </div>
         </div>
 
@@ -293,6 +318,8 @@
         <div class="summary-grid">
           <div><span class="label">Rucks</span><span id="sum-ruck" class="value">0</span></div>
           <div><span class="label">Patadas en juego</span><span id="sum-kick-event" class="value">0</span></div>
+          <div><span class="label">Rucks &lt;3″</span><span id="sum-ruck-fast" class="value">0</span></div>
+          <div><span class="label">Rucks &gt;3″</span><span id="sum-ruck-slow" class="value">0</span></div>
         </div>
 
         <h3 class="summary-subhead">Densidad de eventos</h3>
@@ -311,6 +338,9 @@
         <p id="wcs-filter-print-label" class="wcs-filter-print-label"></p>
         <div id="wcs-stat" class="wcs-stat">Sin datos</div>
         <div id="bip-distribution" class="bip-distribution"></div>
+
+        <p class="sequence-list-subhead">Cómo terminaron las secuencias</p>
+        <div id="outcome-stats" class="summary-grid"></div>
 
         <p class="sequence-list-subhead">Detalle de secuencias y pausas</p>
         <ul id="summary-sequence-list" class="sequence-list"></ul>
