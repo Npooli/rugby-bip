@@ -219,21 +219,26 @@ function finishSession() {
 
 function startActivity(name) {
   if (state.runningActivityId) return;
-  const t = nowIso();
   const activity = {
     id: uid(),
     name: name.trim() || "Período sin nombre",
-    startedAt: t,
+    // Deliberately not started yet — startedAt stays null and there are no
+    // segments until the coach taps an origin (Scrum/Line Out/etc). Setup
+    // time (positioning players, explaining the drill) shouldn't silently
+    // count as BOP before the first sequence actually begins; the period's
+    // own clock and the first BIP segment both start at that same moment,
+    // in startBip().
+    startedAt: null,
     endedAt: null,
     status: "running",
-    phase: "BOP",
+    phase: null,
     // Each entry is a real timestamped interval, not just an accumulated
     // total, so the exact play/rest sequence can be drawn on a timeline and
     // later lined up against GPS or video timestamps. Whether this activity
     // "measures BIP" isn't a separate flag — it's simply whether a BIP
     // segment ever shows up here. Tag a restart source at any point to
     // start counting; never tag one and it just stays a plain timer.
-    segments: [{ id: uid(), phase: "BOP", startedAt: t, endedAt: null }],
+    segments: [],
     // Point-in-time occurrences (no duration), e.g. rucks.
     events: []
   };
@@ -252,6 +257,9 @@ function startBip(activityId, source) {
   const activity = state.activities.find((a) => a.id === activityId);
   if (!activity || activity.status !== "running" || activity.phase === "BIP") return;
   const t = nowIso();
+  // First-ever sequence of the period: this is also when the period's own
+  // clock starts (setup time before this point was never recorded at all).
+  if (activity.startedAt === null) activity.startedAt = t;
   closeOpenSegment(activity, t);
   activity.segments.push({ id: uid(), phase: "BIP", source, startedAt: t, endedAt: null });
   activity.phase = "BIP";
@@ -376,6 +384,16 @@ function reopenLastActivity() {
 function finishActivity(activityId, atIso, opts = {}) {
   const activity = state.activities.find((a) => a.id === activityId);
   if (!activity || activity.status !== "running") return;
+  if (activity.startedAt === null) {
+    // No sequence was ever started — there's nothing real to save (no
+    // duration, no segments), so this discards the period entirely instead
+    // of leaving a broken zero-duration "finished" record behind.
+    state.activities = state.activities.filter((a) => a.id !== activityId);
+    if (state.runningActivityId === activityId) state.runningActivityId = null;
+    saveState();
+    if (!opts.skipRender) render();
+    return;
+  }
   const t = atIso || nowIso();
   closeOpenSegment(activity, t);
   activity.status = "finished";
@@ -1174,10 +1192,20 @@ function render() {
       el.bipSourceLabel.textContent = sourceLabel;
       el.liveBallPhase.textContent = "BIP";
       el.liveBallSub.textContent = sourceLabel;
-    } else {
+    } else if (active.phase === "BOP") {
       el.liveBallPhase.textContent = "BOP";
       el.liveBallSub.textContent = "Fuera de juego";
+    } else {
+      // Period created, but no sequence started yet — nothing is counting.
+      el.liveBallPhase.textContent = "—";
+      el.liveBallSub.textContent = "Elegí el origen para arrancar";
     }
+
+    // Nothing should be tagged before the period's own clock has actually
+    // started — there's no valid timestamp range yet to attach it to.
+    const started = active.startedAt !== null;
+    el.btnLogRuck.disabled = !started;
+    el.btnLogKick.disabled = !started;
 
     el.ruckCount.textContent = active.events.filter((e) => e.type === "RUCK").length;
     el.kickCount.textContent = active.events.filter((e) => e.type === "KICK").length;
@@ -1675,9 +1703,12 @@ function tick() {
 
     // Duration of whichever segment (BIP or BOP) is open right now — not the
     // cumulative bipTime/bopTime above, which sum every segment of that
-    // phase across the whole period.
+    // phase across the whole period. No segment exists at all yet while the
+    // period is still waiting on its first origin tap.
     const currentSegment = active.segments[active.segments.length - 1];
-    el.liveSegmentDuration.textContent = fmtMS(now - Date.parse(currentSegment.startedAt));
+    el.liveSegmentDuration.textContent = currentSegment
+      ? fmtMS(now - Date.parse(currentSegment.startedAt))
+      : "0:00";
   }
 }
 
@@ -1805,7 +1836,11 @@ el.btnRuckSlow.addEventListener("click", () => {
 });
 el.btnFinishActivity.addEventListener("click", () => {
   const active = currentActivity();
-  if (active && confirm(`¿Finalizar el período "${active.name}"?`)) finishActivity(active.id);
+  if (!active) return;
+  const confirmText = active.startedAt === null
+    ? `¿Cancelar el período "${active.name}"? Todavía no arrancó ninguna secuencia.`
+    : `¿Finalizar el período "${active.name}"?`;
+  if (confirm(confirmText)) finishActivity(active.id);
 });
 el.liveFeedList.addEventListener("click", (e) => {
   const btn = e.target.closest(".feed-delete-btn");

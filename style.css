@@ -833,6 +833,11 @@ main {
   opacity: 0.9;
 }
 
+.tag-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .tag-btn-primary {
   background: var(--action);
   color: var(--action-ink);
